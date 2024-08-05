@@ -14,6 +14,10 @@ frame_txt = open(f"{output_dir}/frames.txt", "w")
 frame_txt.close()
 frame_txt = open(f"{output_dir}/frames.txt", "a")
 
+index_txt = open(f"{output_dir}/indices.txt", "w")
+index_txt.close()
+index_txt = open(f"{output_dir}/indices.txt", "a")
+
 #create all the csvs
 num_of_csvs = 10
 hash_func = lambda x: hash(x) % num_of_csvs
@@ -95,6 +99,8 @@ for new_csv in new_csvs:
     writer = csv.DictWriter(new_csv, fields)
     writer.writeheader()
     new_csv.close()
+    
+row_counts = [0] * len(new_csvs)
 
 #loop over all game sessions
 for session_file in os.listdir(dataset_dir):
@@ -156,12 +162,15 @@ for session_file in os.listdir(dataset_dir):
         with open(f"{output_dir}/dataset_{hash_value}.csv", "a", newline="") as new_csv:
             writer = csv.DictWriter(new_csv, fields)
             writer.writerow(new_row)
+            row_counts[hash_value] += 1
         
         frame_txt.write(f"{player_id}_{order}_{game_name}_{row['frame']}\n")
+        index_txt.write(f"{row_counts[hash_value]}\n")
       
     print()
   
 #close all files
 frame_txt.close()
+index_txt.close()
 
 print("\nFinished")
