@@ -1,13 +1,14 @@
 import csv
 import os
 import ast
-from tqdm import tqdm
 import sys
+import shutil
 
 dataset_dir = os.path.abspath("../vr_dataset_sample/files")
 output_dir = "dataset"
 
 if not os.path.isdir(output_dir): os.mkdir(output_dir)
+if not os.path.isdir(f"{output_dir}/images"): os.mkdir(f"{output_dir}/images")
 
 #create and/or empty frames.txt
 frame_txt = open(f"{output_dir}/frames.txt", "w")
@@ -118,7 +119,7 @@ for session_file in os.listdir(dataset_dir):
     reader = csv.DictReader(csv_file)
     for row in reader:
         #if the row has no corrosponding images, skip it
-        if not os.path.isfile(os.path.join(image_dir, row["frame"]+".jpg")):
+        if not os.path.isfile(os.path.join(image_dir, f"{row['frame']}.jpg")):
             print(f"    skipping {player_id}_{order}_{game_name}_{row['frame']} - no image")
             continue
         
@@ -159,6 +160,7 @@ for session_file in os.listdir(dataset_dir):
         
         new_row = {k:v for k,v in zip(fields, new_row_values)}
         
+        #write new row to its corrosponding csv
         with open(f"{output_dir}/dataset_{hash_value}.csv", "a", newline="") as new_csv:
             writer = csv.DictWriter(new_csv, fields)
             writer.writerow(new_row)
@@ -166,6 +168,9 @@ for session_file in os.listdir(dataset_dir):
         
         frame_txt.write(f"{player_id}_{order}_{game_name}_{row['frame']}\n")
         index_txt.write(f"{row_counts[hash_value]}\n")
+        
+        #copy images to new dir
+        shutil.copy(f"{image_dir}/{row['frame']}.jpg", f"{output_dir}/images/{player_id}_{order}_{game_name}_{row['frame']}.jpg")
       
     print()
   
