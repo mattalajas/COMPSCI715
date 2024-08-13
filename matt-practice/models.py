@@ -12,7 +12,7 @@ import torch.utils.data
 import tqdm
 from torch.utils.data import DataLoader, TensorDataset
 
-
+# Model for Image classification
 class ConvBasic(nn.Module):
     def __init__(self):
         super(ConvBasic, self).__init__()
@@ -24,13 +24,16 @@ class ConvBasic(nn.Module):
         self.relu4 = nn.ReLU(inplace=True)
 
     def forward(self, x):
+        # Two convolutional layers for image encoding
         out = self.relu1(self.conv1(x))
         out = self.relu2(self.conv2(out))
         flat_out = out.reshape((x.shape[0], -1))
         
+        # Final encoding to transform 2 dim conv output to a single vector
         flat_out = self.relu4(self.hidden1(flat_out))
-        return flat_out #16
+        return flat_out
 
+# This model isnt being used
 class GridObservationMLP(nn.Module):
     def __init__(self):
         super(GridObservationMLP, self).__init__()
@@ -40,6 +43,7 @@ class GridObservationMLP(nn.Module):
         self.relu2 = nn.ReLU(inplace=False)
 
     def forward(self, x):
+        # Standard two layer mlp 
         out = self.relu1(self.hidden1(x.reshape(-1, 25)))
         out = self.relu2(self.hidden2(out))
         return out
@@ -58,7 +62,7 @@ class GridObservationMLP(nn.Module):
 #         out = self.gru1(x)
 #         return out
 
-
+# Model for memory module
 class actionGRU(nn.Module):
     def __init__(self):
         super(actionGRU, self).__init__()
@@ -68,13 +72,18 @@ class actionGRU(nn.Module):
         self.gru1 = nn.GRUCell(32, 512)
 
     def forward(self, image, action, h0):
+        # Encodes thumbstick output using MLP
         act_emb = self.rel(self.hid(action))
+
+        # Concatenates thumbstick encoding and image encoding
         x = torch.cat((image, act_emb), dim=1)
         x = x.reshape((h0.shape[0], -1))
+
+        # Feeds concatenated vector to GRU alongside hidden layer output
         out = self.gru1(x, h0)
         return out
 
-
+# Standard MLP for fina prediction
 class MLP(nn.Module):
     def __init__(self):
         super(MLP, self).__init__()
@@ -92,7 +101,7 @@ class MLP(nn.Module):
         return out
 
 
-
+# Model isnt being used
 class evalMLP(nn.Module):
     def __init__(self, grid_dims):
         super(evalMLP, self).__init__()
