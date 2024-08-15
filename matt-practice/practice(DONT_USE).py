@@ -48,17 +48,6 @@ earth_fin_gym.drop(columns=['thumbstick'], inplace=True)
 wild_fin_gym[['T1', 'T2', 'T3', 'T4']] = pd.DataFrame(wild_fin_gym['thumbstick'].to_list(), index = wild_fin_gym.index)
 wild_fin_gym.drop(columns=['thumbstick'], inplace=True)
 
-# Initialise models
-init_conv = ConvBasic().to(device)
-init_gru = actionGRU().to(device)
-fin_mlp = MLP().to(device)
-
-# Initialise optimiser and loss function
-optimizer = torch.optim.Adam(
-    set(init_conv.parameters()) | set(init_gru.parameters())
-    | set(fin_mlp.parameters()), lr=0.0001)
-criterion = torch.nn.MSELoss()
-
 # seq_size = how long is each sequence
 seq_size = 100
 batch_size = 2
@@ -86,6 +75,17 @@ test_ind = wild_fin_gym['frame']
 
 # Run tensorboard summary writer
 if verbose: writer = SummaryWriter(f'runs/init_test_{seq_size}')
+
+# Initialise models
+init_conv = ConvBasic().to(device)
+init_gru = actionGRU().to(device)
+fin_mlp = MLP().to(device)
+
+# Initialise optimiser and loss function
+optimizer = torch.optim.Adam(
+    set(init_conv.parameters()) | set(init_gru.parameters())
+    | set(fin_mlp.parameters()), lr=0.0001)
+criterion = torch.nn.MSELoss()
 
 def train(loader, optimizer, criterion):
     init_gru.train()

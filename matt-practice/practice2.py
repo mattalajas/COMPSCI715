@@ -15,7 +15,7 @@ from sklearn.metrics import (average_precision_score, roc_auc_score,
 from torch.utils.data import DataLoader, TensorDataset
 from torch.utils.tensorboard import SummaryWriter
 
-from models import MLP, ConvBasic, actionGRU
+from models import MLP, LeNet, actionGRUdeep, actionGRU
 from utils import create_train_test_split
 
 device = torch.device('mps' if torch.backends.mps.is_available() else 'cuda' if torch.cuda.is_available() else 'cpu')
@@ -25,74 +25,32 @@ verbose = False
 if torch.cuda.is_available():
     torch.cuda.empty_cache()
 
-# earth_path = 'Vrnet/files/earth_data_file.csv'
-# wild_path = 'Vrnet/files/wild_data_file.csv'
-
-# earth_gym = pd.read_csv(earth_path)
-# wild_quest = pd.read_csv(wild_path, nrows=2500)
-
-# # Create dataframe for both games
-# earth_fin_gym = pd.DataFrame(data = {'frame': earth_gym['frame'], 'thumbstick': earth_gym['Thumbstick']})
-# wild_fin_gym = pd.DataFrame(data = {'frame': wild_quest['frame'], 'thumbstick': wild_quest['Thumbstick']})
-
-# earth_fin_gym.dropna(how='any', inplace=True)
-# wild_fin_gym.dropna(how='any', inplace=True)
-
-# # Only retrieve thumbstick values
-# earth_fin_gym['thumbstick'] = earth_fin_gym['thumbstick'].apply(lambda x : literal_eval(str(x)))
-# wild_fin_gym['thumbstick'] = wild_fin_gym['thumbstick'].apply(lambda x : literal_eval(str(x)))
-
-# # Seperates them into columns
-# earth_fin_gym[['T1', 'T2', 'T3', 'T4']] = pd.DataFrame(earth_fin_gym['thumbstick'].to_list(), index = earth_fin_gym.index)
-# earth_fin_gym.drop(columns=['thumbstick'], inplace=True)
-
-# wild_fin_gym[['T1', 'T2', 'T3', 'T4']] = pd.DataFrame(wild_fin_gym['thumbstick'].to_list(), index = wild_fin_gym.index)
-# wild_fin_gym.drop(columns=['thumbstick'], inplace=True)
-
 # seq_size = how long is each sequence, start_pred = when to start predicting thumbstick movement
-seq_size = 150
+seq_size = 30
 batch_size = 1
-start_pred = 100
+start_pred = 16
 epochs = 40
+iter_val = 15
+size = 64
 
 game_name = 'Barbie'
 dir = r"../Vrnet"
 
-path_map, train_loader, test_loader = create_train_test_split(game_name, dir, device, seq_size=seq_size, batch_size=batch_size)
-
-# # Split gameplay into sequences
-# earth_fin_gym_t = torch.Tensor(earth_fin_gym.values).to(device)
-# earth_fin_gym_t = torch.split(earth_fin_gym_t, seq_size)
-
-# wild_fin_gym_t = torch.Tensor(wild_fin_gym.values).to(device)
-# wild_fin_gym_t = torch.split(wild_fin_gym_t, seq_size)
-
-# # Remove final recoding if it does not fit the batch dimensions
-# if earth_fin_gym_t[-1].shape[0] != seq_size:
-#     earth_fin_gym_t = earth_fin_gym_t[:-1]
-
-# if wild_fin_gym_t[-1].shape[0] != seq_size:
-#     wild_fin_gym_t = wild_fin_gym_t[:-1]
-
-# # Create batches for training and testing
-# train_loader = DataLoader(earth_fin_gym_t, batch_size=batch_size, shuffle=False)
-# train_ind = earth_fin_gym['frame']
-
-# test_loader = DataLoader(wild_fin_gym_t, batch_size=batch_size, shuffle=False)
-# test_ind = wild_fin_gym['frame']
+# Create train test split
+path_map, train_loader, test_loader = create_train_test_split(game_name, dir, device, seq_size=seq_size, batch_size=batch_size, iter=iter_val)
 
 # Run tensorboard summary writer
-if verbose: writer = SummaryWriter(f'runs/{game_name}_init_test_seq_size_{seq_size}_seqstart_{start_pred}')
+if verbose: writer = SummaryWriter(f'runs/{game_name}_init_test2_seq_size_{seq_size}_seqstart_{start_pred}')
 
 # Initialise models
-init_conv = ConvBasic().to(device)
+init_conv = LeNet().to(device)
 init_gru = actionGRU().to(device)
 fin_mlp = MLP().to(device)
 
 # Initialise optimiser and loss function
 optimizer = torch.optim.Adam(
     set(init_conv.parameters()) | set(init_gru.parameters())
-    | set(fin_mlp.parameters()), lr=0.001)
+    | set(fin_mlp.parameters()), lr=0.0001)
 criterion = torch.nn.MSELoss()
 
 def train(loader, optimizer, criterion):
@@ -122,8 +80,8 @@ def train(loader, optimizer, criterion):
             # Reads and encodes the image
             image_t = []
             for i, img_ind in enumerate(indices):
-                image = cv2.imread(f'../{path[i]}/video/{int(img_ind)}.jpg')
-                image = cv2.resize(image, (64, 64))
+                image = cv2.imread(f'{path[i]}/video/{int(img_ind)}.jpg')
+                image = cv2.resize(image, (size, size))
                 image_t.append(image)
 
             image_t = np.array(image_t)
@@ -164,7 +122,8 @@ def train(loader, optimizer, criterion):
     
     # if verbose: writer.add_histogram('Training values', values=c, bins=u)
     # print(u)
-    # print(sorted(c))
+    # c = sorted(c, reverse=True)
+    # print(c[0], sum(c[1:]))
 
     # plt.bar(u, c)
     # plt.xticks(rotation=90)
@@ -191,6 +150,8 @@ def test(loader, criterion):
             h0 = torch.ones((batch.shape[0], 512)).to(device)
             h0 = torch.nn.init.xavier_uniform_(h0)
 
+            losses = torch.empty(0).to(device)
+
             for seq in range(batch.shape[1]-1):
                 # (image_ind, path, T1, T2, T3, T4)
                 indices = batch[:, seq, 0]
@@ -199,7 +160,7 @@ def test(loader, criterion):
                 
                 image_t = []
                 for i, img_ind in enumerate(indices):
-                    image = cv2.imread(f'../{path[i]}/video/{int(img_ind)}.jpg')
+                    image = cv2.imread(f'{path[i]}/video/{int(img_ind)}.jpg')
                     image = cv2.resize(image, (64, 64))
                     image_t.append(image)
 
@@ -229,7 +190,8 @@ def test(loader, criterion):
     # u = [str(x) for x in u.tolist()]
     # if verbose: writer.add_histogram('Testing values', values=c, bins=u)
     # print(u)
-    # print(sorted(c))
+    # c = sorted(c, reverse=True)
+    # print(c[0], sum(c[1:]))
     
     # plt.bar(u, c)
     # plt.xticks(rotation=90)
