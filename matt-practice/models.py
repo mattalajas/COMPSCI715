@@ -181,18 +181,18 @@ class actionLSTM(nn.Module):
         torch.nn.init.xavier_uniform_(self.lstm1.weight_ih)
         torch.nn.init.zeros_(self.lstm1.bias_ih)
 
-    def forward(self, image, action, h0):
+    def forward(self, image, action, h0, c0):
         # Encodes thumbstick output using MLP
-        act_emb = F.relu(self.hid(action))
+        act_emb = F.relu(self.hid1(action))
 
         # Concatenates thumbstick encoding and image encoding
         x = torch.cat((image, act_emb), dim=1)
         x = x.reshape((h0.shape[0], -1))
-        x = F.relu(self.hid2)
+        x = F.relu(self.hid2(x))
 
-        # Feeds concatenated vector to GRU alongside hidden layer output
-        out = self.lstm1(x, h0)
-        return out
+        # Feeds concatenated vector to LSTM alongside hidden layer and cell state
+        hx, cx = self.lstm1(x, (h0, c0))
+        return hx, cx 
 
 class actionGRUdeep(nn.Module):
     def __init__(self):

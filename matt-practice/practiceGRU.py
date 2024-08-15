@@ -32,6 +32,7 @@ start_pred = 16
 epochs = 40
 iter_val = 15
 size = 64
+learning_rate = 0.001
 
 game_name = 'Barbie'
 dir = r"../Vrnet"
@@ -50,13 +51,13 @@ fin_mlp = MLP().to(device)
 # Initialise optimiser and loss function
 optimizer = torch.optim.Adam(
     set(init_conv.parameters()) | set(init_gru.parameters())
-    | set(fin_mlp.parameters()), lr=0.0001)
+    | set(fin_mlp.parameters()), lr=learning_rate)
 criterion = torch.nn.MSELoss()
 
 def train(loader, optimizer, criterion):
     init_gru.train()
     init_conv.train()
-    init_gru.train()
+    fin_mlp.train()
     
     total_loss = []
     preds = torch.empty(0)
@@ -138,7 +139,7 @@ def train(loader, optimizer, criterion):
 def test(loader, criterion):
     init_gru.eval()
     init_conv.eval()
-    init_gru.eval()
+    fin_mlp.eval()
 
     rmses = torch.empty(0)
     preds = torch.empty(0)
