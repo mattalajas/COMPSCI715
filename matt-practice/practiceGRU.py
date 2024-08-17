@@ -27,12 +27,13 @@ if torch.cuda.is_available():
 
 # seq_size = how long is each sequence, start_pred = when to start predicting thumbstick movement
 seq_size = 30
-batch_size = 1
+batch_size = 10
 start_pred = 16
 epochs = 40
 iter_val = 15
-size = 64
+img_size = 64
 learning_rate = 0.001
+regularisation = 0.0001
 
 game_name = 'Barbie'
 dir = r"../Vrnet"
@@ -44,7 +45,7 @@ path_map, train_loader, test_loader = create_train_test_split(game_name, dir, de
 if verbose: writer = SummaryWriter(f'runs/{game_name}_init_test2_seq_size_{seq_size}_seqstart_{start_pred}')
 
 # Initialise models
-init_conv = LeNet().to(device)
+init_conv = LeNet(img_size).to(device)
 init_gru = actionGRU().to(device)
 fin_mlp = MLP().to(device)
 
@@ -82,7 +83,7 @@ def train(loader, optimizer, criterion):
             image_t = []
             for i, img_ind in enumerate(indices):
                 image = cv2.imread(f'{path[i]}/video/{int(img_ind)}.jpg')
-                image = cv2.resize(image, (size, size))
+                image = cv2.resize(image, (img_size, img_size))
                 image_t.append(image)
 
             image_t = np.array(image_t)
@@ -108,7 +109,12 @@ def train(loader, optimizer, criterion):
                 preds = torch.cat((preds, y.cpu()))
 
         # Loss calculation, gradient calculation, then backprop
-        losses = torch.mean(losses)
+        
+        l1 = sum(p.square().sum() for p in init_gru.parameters())
+        l1 += sum(p.square().sum() for p in init_conv.parameters())
+        l1 += sum(p.square().sum() for p in fin_mlp.parameters())
+        
+        losses = torch.mean(losses) + regularisation*l1
         losses.backward()
         optimizer.step()
 

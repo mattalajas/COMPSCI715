@@ -27,7 +27,7 @@ if torch.cuda.is_available():
 
 # seq_size = how long is each sequence, start_pred = when to start predicting thumbstick movement
 seq_size = 30
-batch_size = 1
+batch_size = 10
 start_pred = 16
 epochs = 40
 iter_val = 15
@@ -44,7 +44,7 @@ path_map, train_loader, test_loader = create_train_test_split(game_name, dir, de
 if verbose: writer = SummaryWriter(f'runs/{game_name}_init_test2_seq_size_{seq_size}_seqstart_{start_pred}')
 
 # Initialise models
-init_conv = LeNet().to(device)
+init_conv = LeNet(img_size).to(device)
 init_lstm = actionLSTM().to(device)
 fin_mlp = MLP().to(device)
 
@@ -66,11 +66,11 @@ def train(loader, optimizer, criterion):
     for batch in loader:
         optimizer.zero_grad()
         # Need to initialise the hidden state for LSTM
-        h0 = torch.empty((batch.shape[0], 512)).to(device)
+        h0 = torch.zeros((batch.shape[0], 512)).to(device)
         h0 = torch.nn.init.xavier_uniform_(h0)
 
-        c0 = torch.empty((batch.shape[0], 512)).to(device)
-        c0 = torch.nn.init.xavier_uniform_(h0)
+        c0 = torch.zeros((batch.shape[0], 512)).to(device)
+        c0 = torch.nn.init.xavier_uniform_(c0)
 
         losses = torch.empty(0).to(device)
 
@@ -134,6 +134,8 @@ def train(loader, optimizer, criterion):
     # plt.show()
     
     # Returns evaluation scores
+    if loader == 0: raise
+    if sum(total_loss) == 0: raise
     return sum(total_loss) / len(loader), total_loss
 
 # Test is very similar to training
@@ -151,11 +153,11 @@ def test(loader, criterion):
 
     with torch.no_grad():
         for batch in loader:
-            h0 = torch.ones((batch.shape[0], 512)).to(device)
+            h0 = torch.zeros((batch.shape[0], 512)).to(device)
             h0 = torch.nn.init.xavier_uniform_(h0)
             
-            c0 = torch.empty((batch.shape[0], 512)).to(device)
-            c0 = torch.nn.init.xavier_uniform_(h0)
+            c0 = torch.zeros((batch.shape[0], 512)).to(device)
+            c0 = torch.nn.init.xavier_uniform_(c0)
 
             losses = torch.empty(0).to(device)
 
