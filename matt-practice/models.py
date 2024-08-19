@@ -53,13 +53,21 @@ class ConvBasic(nn.Module):
         return flat_out
     
 class LeNet(nn.Module):
-    def __init__(self):
+    def __init__(self, size, padding=0, kernel=5, stride=1):
         super(LeNet, self).__init__()
-        self.conv1 = nn.Conv2d(in_channels=3, out_channels=6, kernel_size=5)
-        self.conv2 = nn.Conv2d(in_channels=6, out_channels=16, kernel_size=5)
-        self.fc1   = nn.Linear(16*13*13, 120)
-        self.fc2   = nn.Linear(120, 84)
-        self.fc3   = nn.Linear(84, 16)
+        self.conv1 = nn.Conv2d(in_channels=3, out_channels=6, kernel_size=kernel, stride=stride, padding=padding)
+        size1 = int((size + 2*padding - kernel)/stride)+1
+        self.batch1 = nn.BatchNorm2d(6, size1, size1, track_running_stats=False)
+
+        self.conv2 = nn.Conv2d(in_channels=6, out_channels=16, kernel_size=kernel, stride=stride, padding=padding)
+        size2 = int((size1-2)/2)+1
+        size2 = int((size2 + 2*padding - kernel)/stride)+1
+        self.batch2 = nn.BatchNorm2d(16, size2, size2, track_running_stats=False)
+
+        size3 = int((size2-2)/2)+1
+        self.fc1 = nn.Linear(16*size3*size3, 120)
+        self.fc2 = nn.Linear(120, 84)
+        self.fc3 = nn.Linear(84, 16)
 
         self.initialise_weights()
     
@@ -81,9 +89,9 @@ class LeNet(nn.Module):
         
 
     def forward(self, x):
-        out = F.relu(self.conv1(x))
+        out = F.relu(self.batch1(self.conv1(x)))
         out = F.max_pool2d(out, 2)
-        out = F.relu(self.conv2(out))
+        out = F.relu(self.batch2(self.conv2(out)))
         out = F.max_pool2d(out, 2)
         out = out.reshape(out.size(0), -1)
         out = F.relu(self.fc1(out))
@@ -127,6 +135,7 @@ class actionGRU(nn.Module):
         # Check input size
         self.hid1 = nn.Linear(4, 16)
         self.hid2 = nn.Linear(32, 128)
+        self.batch1 = nn.BatchNorm1d(128, track_running_stats=False)
         self.gru1 = nn.GRUCell(128, 512)
     
         self.initialise_weights()
@@ -151,7 +160,7 @@ class actionGRU(nn.Module):
         # Concatenates thumbstick encoding and image encoding
         x = torch.cat((image, act_emb), dim=1)
         x = x.reshape((h0.shape[0], -1))
-        x = F.relu(self.hid2(x))
+        x = F.relu(self.batch1(self.hid2(x)))
 
         # Feeds concatenated vector to GRU alongside hidden layer output
         out = self.gru1(x, h0)
@@ -164,6 +173,7 @@ class actionLSTM(nn.Module):
         # Check input size
         self.hid1 = nn.Linear(4, 16)
         self.hid2 = nn.Linear(32, 128)
+        self.batch1 = nn.BatchNorm1d(128, track_running_stats=False)
         self.lstm1 = nn.LSTMCell(128, 512)
     
         self.initialise_weights()
@@ -184,11 +194,10 @@ class actionLSTM(nn.Module):
     def forward(self, image, action, h0, c0):
         # Encodes thumbstick output using MLP
         act_emb = F.relu(self.hid1(action))
-
         # Concatenates thumbstick encoding and image encoding
         x = torch.cat((image, act_emb), dim=1)
         x = x.reshape((h0.shape[0], -1))
-        x = F.relu(self.hid2(x))
+        x = F.relu(self.batch1(self.hid2(x)))
 
         # Feeds concatenated vector to LSTM alongside hidden layer and cell state
         hx, cx = self.lstm1(x, (h0, c0))
