@@ -20,7 +20,7 @@ from utils import create_train_test_split
 
 device = torch.device('mps' if torch.backends.mps.is_available() else 'cuda' if torch.cuda.is_available() else 'cpu')
 # For data collection, change to True if want to evaluate output 
-verbose = False
+verbose = True
 
 if torch.cuda.is_available():
     torch.cuda.empty_cache()
@@ -29,19 +29,20 @@ if torch.cuda.is_available():
 seq_size = 30
 batch_size = 10
 start_pred = 16
-epochs = 40
+epochs = 150
 iter_val = 15
 img_size = 64
-learning_rate = 0.001
+learning_rate = 0.01
+regularisation = 0.0001
 
 game_name = 'Barbie'
-dir = r"../Vrnet"
+dir = r"Vrnet"
 
 # Create train test split
 path_map, train_loader, test_loader = create_train_test_split(game_name, dir, device, seq_size=seq_size, batch_size=batch_size, iter=iter_val)
 
 # Run tensorboard summary writer
-if verbose: writer = SummaryWriter(f'runs/{game_name}_init_test2_seq_size_{seq_size}_seqstart_{start_pred}')
+if verbose: writer = SummaryWriter(f'runs/LSTM_{game_name}_init_test2_seq_size_{seq_size}_seqstart_{start_pred}_iter_{iter_val}_reg_{regularisation}_lr_{learning_rate}')
 
 # Initialise models
 init_conv = LeNet(img_size).to(device)
@@ -110,8 +111,15 @@ def train(loader, optimizer, criterion):
 
                 preds = torch.cat((preds, y.cpu()))
 
+        # Regularisation
+        l1 = sum(p.abs().sum() for p in init_lstm.parameters())
+        l1 += sum(p.abs().sum() for p in init_conv.parameters())
+        l1 += sum(p.abs().sum() for p in fin_mlp.parameters())
+        
         # Loss calculation, gradient calculation, then backprop
         losses = torch.mean(losses)
+
+        losses += regularisation*l1
         losses.backward()
         optimizer.step()
 
