@@ -1,0 +1,3 @@
+[submodule "c-rnn-gan.pytorch"]
+	path = c-rnn-gan.pytorch
+	url = https://github.com/HugoPhibbs/c-rnn-gan.pytorch.git
