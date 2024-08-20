@@ -68,18 +68,15 @@ fields = ["player_id",
           "right_controller_dir_b",
           "right_controller_dir_c",
           "right_controller_dir_d",
-          "head_angvel_a",
-          "head_angvel_b",
-          "head_angvel_c",
-          "head_angvel_d",
-          "left_controller_angvel_a",
-          "left_controller_angvel_b",
-          "left_controller_angvel_c",
-          "left_controller_angvel_d",
-          "right_controller_angvel_a",
-          "right_controller_angvel_b",
-          "right_controller_angvel_c",
-          "right_controller_angvel_d",
+          "head_angvel_x",
+          "head_angvel_y",
+          "head_angvel_z",
+          "left_controller_angvel_x",
+          "left_controller_angvel_y",
+          "left_controller_angvel_z",
+          "right_controller_angvel_x",
+          "right_controller_angvel_y",
+          "right_controller_angvel_z",
           
           "Index_trigger_left",
           "Index_trigger_right",
@@ -102,6 +99,7 @@ for new_csv in new_csvs:
     new_csv.close()
     
 row_counts = [0] * len(new_csvs)
+
 
 #loop over all game sessions
 for session_file in os.listdir(dataset_dir):
@@ -151,11 +149,12 @@ for session_file in os.listdir(dataset_dir):
                             *ast.literal_eval(row["HandTrigger"]),
                             *ast.literal_eval(row["Thumbstick"]),
                             
-                            row["Buttons"],
-                            row["Touches"],
-                            row["NearTouches"]]
-        except:
+                            float(row["Buttons"]),
+                            float(row["Touches"]),
+                            float(row["NearTouches"])]
+        except Exception as e:
             print(f"    skipping {player_id}_{order}_{game_name}_{row['frame']} - missing values")
+            #print(e)
             continue
         
         new_row = {k:v for k,v in zip(fields, new_row_values)}
@@ -170,7 +169,7 @@ for session_file in os.listdir(dataset_dir):
         index_txt.write(f"{row_counts[hash_value]}\n")
         
         #copy images to new dir
-        shutil.copy(f"{image_dir}/{row['frame']}.jpg", f"{output_dir}/images/{player_id}_{order}_{game_name}_{row['frame']}.jpg")
+        #shutil.copy(f"{image_dir}/{row['frame']}.jpg", f"{output_dir}/images/{player_id}_{order}_{game_name}_{row['frame']}.jpg")
       
     print()
   
