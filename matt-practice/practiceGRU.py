@@ -20,7 +20,7 @@ from utils import create_train_test_split
 
 device = torch.device('mps' if torch.backends.mps.is_available() else 'cuda' if torch.cuda.is_available() else 'cpu')
 # For data collection, change to True if want to evaluate output 
-verbose = False
+verbose = True
 
 if torch.cuda.is_available():
     torch.cuda.empty_cache()
@@ -42,7 +42,7 @@ dir = r"/data/mala711/COMPSCI715/Vrnet"
 path_map, train_loader, test_loader = create_train_test_split(game_name, dir, device, seq_size=seq_size, batch_size=batch_size, iter=iter_val)
 
 # Run tensorboard summary writer
-if verbose: writer = SummaryWriter(f'runs/GRU_{game_name}_init_test2_seq_size_{seq_size}_seqstart_{start_pred}_iter_{iter_val}_reg_{regularisation}_lr_{learning_rate}')
+if verbose: writer = SummaryWriter(f'/data/mala711/COMPSCI715/matt-practice/runs/GRU_{game_name}_init_test2_seq_size_{seq_size}_seqstart_{start_pred}_iter_{iter_val}_reg_{regularisation}_lr_{learning_rate}')
 
 # Initialise models
 init_conv = LeNet(img_size).to(device)

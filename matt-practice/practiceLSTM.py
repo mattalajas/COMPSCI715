@@ -36,13 +36,13 @@ learning_rate = 0.01
 regularisation = 0.0001
 
 game_name = 'Barbie'
-dir = r"Vrnet"
+dir = r"/data/mala711/COMPSCI715/Vrnet"
 
 # Create train test split
 path_map, train_loader, test_loader = create_train_test_split(game_name, dir, device, seq_size=seq_size, batch_size=batch_size, iter=iter_val)
 
 # Run tensorboard summary writer
-if verbose: writer = SummaryWriter(f'runs/LSTM_{game_name}_init_test2_seq_size_{seq_size}_seqstart_{start_pred}_iter_{iter_val}_reg_{regularisation}_lr_{learning_rate}')
+if verbose: writer = SummaryWriter(f'/data/mala711/COMPSCI715/matt-practice/runs/LSTM_{game_name}_init_test2_seq_size_{seq_size}_seqstart_{start_pred}_iter_{iter_val}_reg_{regularisation}_lr_{learning_rate}')
 
 # Initialise models
 init_conv = LeNet(img_size).to(device)
