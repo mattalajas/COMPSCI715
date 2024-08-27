@@ -1,10 +1,10 @@
 import os
-from ast import literal_eval
 import numpy as np
 import pandas as pd
 from fastparquet import ParquetFile
-
-from tqdm import tqdm
+from torch.utils.data import Dataset, DataLoader
+from torchvision.io import read_image
+import torch
 
 class DataUtils:
     @staticmethod
@@ -71,6 +71,9 @@ class DataUtils:
         #remove unwanted columns
         df = df.drop(columns = [c for c in df.columns if not c in cols_to_keep], axis=1)
         
+        #remove rows with no images
+        df = df.dropna(subset=["video"])
+        
         #helper functions for creating new column names
         two_col_names = lambda name: [name + "_" + c for c in ["left", "right"]]
         three_col_names = lambda name: [name + "_" + c for c in ["x", "y", "z"]]
@@ -96,90 +99,65 @@ class DataUtils:
         df = df[col_order]          
         return df
     
+    
+class SingleGameDataset(Dataset):
+    def __init__(self, game_name, frame_count = 1, cols_to_predict=None, transform=None, target_transform=None):
+        """
+        Pytorch dataset for a single game
+        game_name: name of the game to create the dataset around e.g. 'Barbie'
+        frame_count: number of frames to return with each item (1 will return the current frame, > 1 will return the current and previous frames)
+        cols_to_predict: list of column names (from formated dataset) that are treated as labels/prediction targets
+        transform: optional transformation applied to (torch 2 or 3D tensor) images 
+        target_transform: optional transformation to be applied to target 1D tensor
+        """
+        #Default cols to predict
+        if cols_to_predict is None: cols_to_predict = ["thumbstick_left_x", "thumbstick_left_y", "thumbstick_right_x", "thumbstick_right_y"]
 
-#all the fields on intrest in the formatted dataset
-all_fields = ["player_id",
-          "order",
-          "game_name",
-          "frame_index",
-          
-          "head_pos_x",
-          "head_pos_y",
-          "head_pos_z",
-          "left_controller_pos_x",
-          "left_controller_pos_y",
-          "left_controller_pos_z",
-          "right_controller_pos_x",
-          "right_controller_pos_y",
-          "right_controller_pos_z",
-          "head_vel_x",
-          "head_vel_y",
-          "head_vel_z",
-          "left_controller_vel_x",
-          "left_controller_vel_y",
-          "left_controller_vel_z",
-          "right_controller_vel_x",
-          "right_controller_vel_y",
-          "right_controller_vel_z",
-          
-          "head_dir_a",
-          "head_dir_b",
-          "head_dir_c",
-          "head_dir_d",
-          "left_controller_dir_a",
-          "left_controller_dir_b",
-          "left_controller_dir_c",
-          "left_controller_dir_d",
-          "right_controller_dir_a",
-          "right_controller_dir_b",
-          "right_controller_dir_c",
-          "right_controller_dir_d",
-          "head_angvel_x",
-          "head_angvel_y",
-          "head_angvel_z",
-          "left_controller_angvel_x",
-          "left_controller_angvel_y",
-          "left_controller_angvel_z",
-          "right_controller_angvel_x",
-          "right_controller_angvel_y",
-          "right_controller_angvel_z",
-          
-          "Index_trigger_left",
-          "Index_trigger_right",
-          "Hand_trigger_left",
-          "Hand_trigger_right",
-          "Thumbstick_left_x",
-          "Thumbstick_left_y",
-          "Thumbstick_right_x",
-          "Thumbstick_right_y",
-          
-          "Buttons",
-          "Touches",
-          "NearTouches"
-          ]
-
-#the fields that the model should receive as input and output
-input_control_fields = all_fields[4:13] + all_fields[22:34]
-output_control_fields = all_fields[13:22] + all_fields[34:-3]
-
-def dataset_stats(rows):
-    """Computes the min, max and average of each field in the dataset."""
-
-    mins = np.zeros((50,), dtype=float)
-    avgs = np.zeros((50,), dtype=float)
-    maxs = np.zeros((50,), dtype=float)
-    count = 0
-
-    for row in tqdm(rows, total=len(rows)):
-        row_values = list(map(float, row[4:]))
-        avgs += np.array(row_values)
-        maxs = np.maximum(maxs, np.array(row_values))
-        mins = np.minimum(mins, np.array(row_values))
+        #set up df so each row has the current frame number and columns for previous frame numbers
+        self.df = DataUtils.load_data_by_name(game_name)
+        self.df = DataUtils.format_dataset(self.df)
+        self.df = self.df[["game_session", "frame"] + cols_to_predict]
+        for i in range(1, frame_count):
+            self.df[f"frame_{i}"] = self.df.groupby("game_session")["frame"].shift(i)
+            
+        #reorder cols and remove rows with not enough previous frames
+        self.df = self.df[["game_session", "frame"] + [f"frame_{i}" for i in range(1, frame_count)] + cols_to_predict]      
+        self.df = self.df.dropna()
         
-        count += 1
+        #change name of frame col to match previous frame col name
+        if frame_count > 1: self.df = self.df.rename(columns = {"frame" : "frame_0"})
 
-    for i, name in enumerate(all_fields[4:]):
-        print(f"{name}:")
-        print(f"min: {mins[i]}")
-        print(f"avg: {avgs[i]/count}")
-        print(f"max: {maxs[i]}\n")
+        #helper function to build image dirs
+        self.get_im_dir = lambda session_name, frame: f"/data/ysun209/VR.net/videos/{session_name}/video/{frame}.jpg"        
+        
+        self.frame_count = frame_count
+        self.cols_to_predict = cols_to_predict
+        self.transform = transform
+        self.target_transform = target_transform
+        
+    def __len__(self):
+        return len(self.df)
+    
+    def __getitem__(self, index):
+        data_row = self.df.iloc[index]
+        session = data_row["game_session"]
+        
+        if self.frame_count == 1:
+            #Read single image
+            image = read_image(self.get_im_dir(session, data_row["frame"]))
+        else:
+            #read multiple images
+            image = []
+            for i in range(0, self.frame_count):
+                image.append(read_image(self.get_im_dir(session, int(data_row[f"frame_{i}"]))))
+            image = torch.from_numpy(np.array(image))
+        
+        #read target
+        target = data_row[self.cols_to_predict]
+        target = torch.from_numpy(target.to_numpy().astype(float))
+        
+        #apply transformations
+        if self.transform: image = self.transform(image)
+        if self.target_transform: target = self.target_transform(target)
+        
+        return image, target
