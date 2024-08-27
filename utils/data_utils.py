@@ -27,10 +27,75 @@ class DataUtils:
                 #                                                'head_dir', 'head_pos', 'head_vel', 'head_angvel', 'left_eye_dir', 
                 #                                                'left_eye_pos', 'left_eye_vel', 'left_eye_angvel', 'right_eye_dir', 
                 #                                                'right_eye_pos', 'right_eye_vel', 'right_eye_angvel'])
-                df = ParquetFile(file_path).to_pandas(columns=['game_name','game_session','frame', 'timestamp', 'video', 'Thumbstick'])
+                df = ParquetFile(file_path).to_pandas()#columns=['game_name','game_session','frame', 'timestamp', 'video', 'Thumbstick'])
 
                 df_list.append(df)
         return pd.concat(df_list, ignore_index=True)
+    
+    @staticmethod
+    def split_series(s):
+        """
+        Splits a series (df column) that contains a multivalued attribute (e.g. head_dir)
+        s: pandas series to be split
+        """
+        return s.str.strip("()").str.split(", ", expand=True).astype(float)
+    
+    @staticmethod
+    def append_split_columns(df, name, new_names):
+        """
+        Splits a multivalued column and adds it to dataframe
+        df: dataframe to add new columns to
+        name: string name of the column to be split
+        new_names: list of strings corresponding to the names of the new split columns
+        """
+        df[new_names] = DataUtils.split_series(df[name])
+        df.drop(name, axis=1, inplace = True)
+
+    
+    @staticmethod
+    def format_dataset(df, include_buttons=False):
+        """
+        Formats the dataset to remove unwanted attributes and split multivalued attributes
+        df: pandas dataframe to format
+        include_buttons: whether to include the Buttons, Touches, NearTouches attributes
+        """
+        
+        cols_to_keep = ["game_name","game_session", "frame", "video",
+                        "head_dir", "head_pos", "head_vel", "head_angvel",
+                        "IndexTrigger","HandTrigger","Thumbstick"]
+                        #"left_controller_dir","left_controller_pos","left_controller_vel","left_controller_angvel",
+                        #"right_controller_dir","right_controller_pos","right_controller_vel","right_controller_angvel"]
+        
+        if include_buttons: cols_to_keep += ["Buttons","Touches","NearTouches"]
+        
+        #remove unwanted columns
+        df = df.drop(columns = [c for c in df.columns if not c in cols_to_keep], axis=1)
+        
+        #helper functions for creating new column names
+        two_col_names = lambda name: [name + "_" + c for c in ["left", "right"]]
+        three_col_names = lambda name: [name + "_" + c for c in ["x", "y", "z"]]
+        four_col_names = lambda name: [name + "_" + c for c in ["a", "b", "c", "d"]]
+        four_col_names_2 = lambda name: [name + "_" + c for c in ["left_x", "left_y", "right_x", "right_y"]]
+    
+        #split head multivalued columns
+        DataUtils.append_split_columns(df, "head_pos", three_col_names("head_pos"))
+        DataUtils.append_split_columns(df, "head_vel", three_col_names("head_vel"))
+        DataUtils.append_split_columns(df, "head_dir", four_col_names("head_dir"))
+        DataUtils.append_split_columns(df, "head_angvel", three_col_names("head_angvel"))
+        
+        #split controller multivalued columns
+        DataUtils.append_split_columns(df, "IndexTrigger", two_col_names("index_trigger"))
+        DataUtils.append_split_columns(df, "HandTrigger", two_col_names("hand_trigger"))
+        DataUtils.append_split_columns(df, "Thumbstick", four_col_names_2("thumbstick"))
+        
+        #reorder the columns of the dataframe
+        col_order = cols_to_keep[:4] +\
+                    [c for c in df.columns if c not in cols_to_keep] +\
+                    (cols_to_keep[-3:] if include_buttons else [])
+                    
+        df = df[col_order]          
+        return df
+    
 
 #all the fields on intrest in the formatted dataset
 all_fields = ["player_id",
