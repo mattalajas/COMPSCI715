@@ -100,8 +100,113 @@ class DataUtils:
         return df
     
     
-class SingleGameDataset(Dataset):
-    def __init__(self, game_name, frame_count = 1, cols_to_predict=None, transform=None, target_transform=None):
+    def ml_format(df, frame_count, cols_to_predict, cols_to_keep):
+        """
+        Formats a (formatted) data frame for training, validating and testing models
+        df: dataframe to be formatted
+        frame_count: number of frames to return with each item (1 will return the current frame, > 1 will return the current and previous frames)
+        cols_to_predict: list of column names (from formated dataset) that are treated as labels/prediction targets
+        """
+        #Remove uneeded columns
+        df = df[["game_session", "frame"] + cols_to_keep + cols_to_predict]
+        
+        #Add column for each additional previous frame
+        for i in range(1, frame_count):
+            df[f"frame_{i}"] = df.groupby("game_session")["frame"].shift(i)
+            
+        #reorder cols and remove rows with not enough previous frames
+        df = df[["game_session", "frame"] + [f"frame_{i}" for i in range(1, frame_count)] + cols_to_keep + cols_to_predict]      
+        df = df.dropna()
+        
+        #change name of frame col to match previous frame col name
+        if frame_count > 1:df = df.rename(columns = {"frame" : "frame_0"})
+        
+        return df
+    
+    
+class DatasetTemplate(Dataset):
+    def __init__(self, frame_count=1, cols_to_predict=None, cols_to_keep=None, transform=None, target_transform=None):
+        """
+        Dataset template to be used for making spesific datasets, NOT TO IMPLEMENTED, ONLY INHERITED
+        frame_count: number of frames to return with each item (1 will return the current frame, > 1 will return the current and previous frames)
+        cols_to_predict: list of column names (from formated dataset) that are treated as labels/prediction targets
+        cols_to_keep: list of column names to include with images as a models input
+        transform: optional transformation applied to (torch 2 or 3D tensor) images 
+        target_transform: optional transformation to be applied to target 1D tensor
+        """
+        #Default value for cols
+        if cols_to_predict is None: cols_to_predict = ["thumbstick_left_x", "thumbstick_left_y", "thumbstick_right_x", "thumbstick_right_y"]
+        if cols_to_keep is None: cols_to_keep = []
+     
+        #Helper function used to find location of stored images
+        self.get_im_path = lambda session_name, frame: f"/data/ysun209/VR.net/videos/{session_name}/video/{frame}.jpg"  
+        
+        self.frame_count = frame_count
+        self.cols_to_predict = cols_to_predict
+        self.cols_to_keep = cols_to_keep
+        self.transform = transform
+        self.target_transform = target_transform
+    
+    def __len__(self):
+        return len(self.df)
+    
+    def __getitem__(self, index):
+        """
+        Returns a single (x, y) dataset item with the given index
+        If len(cols_to_keep) > 0, then x is a tuple of the form (image, control_vector), otherwise its just the image
+        If frame_count > 1, then image is a 3D tensor, otherwise its a 2D tensor
+        Control vector and y are both 1D tensors
+        """
+        data_row = self.df.iloc[index]
+        session = data_row["game_session"]
+        
+        if self.frame_count == 1:
+            #Read single image
+            x = read_image(self.get_im_path(session, data_row["frame"]))
+        else:
+            #read multiple images
+            x = []
+            for i in range(0, self.frame_count):
+                x.append(read_image(self.get_im_path(session, int(data_row[f"frame_{i}"]))))
+            x = torch.from_numpy(np.array(x))
+            
+        if len(self.cols_to_keep):
+            control_vector = data_row[self.cols_to_keep]
+            control_vector = torch.from_numpy(control_vector.to_numpy().astype(float))
+            x = (x, control_vector)
+        
+        #read target
+        y = data_row[self.cols_to_predict]
+        y = torch.from_numpy(y.to_numpy().astype(float))
+        
+        #apply transformations
+        if self.transform: y = self.transform(x)
+        if self.target_transform: y = self.target_transform(y)
+        
+        return x, y
+    
+
+class SingleSessionDataset(DatasetTemplate):
+     def __init__(self, session_name, frame_count = 1, cols_to_predict=None, cols_to_keep=None, transform=None, target_transform=None):
+        """
+        Pytorch dataset for a single session of a game game
+        game_name: name of the game to create the dataset around e.g. 'Barbie'
+        frame_count: number of frames to return with each item (1 will return the current frame, > 1 will return the current and previous frames)
+        cols_to_predict: list of column names (from formated dataset) that are treated as labels/prediction targets
+        transform: optional transformation applied to (torch 2 or 3D tensor) images 
+        target_transform: optional transformation to be applied to target 1D tensor
+        """
+        super().__init__(frame_count, cols_to_predict, cols_to_keep, transform, target_transform)
+        
+        #Create and format the dataframe
+        self.df = DataUtils.load_data_by_name(session_name.split("_")[2])
+        self.df = DataUtils.format_dataset(self.df)
+        self.df = self.df[self.df["game_session"] == session_name]
+        self.df = DataUtils.ml_format(self.df, self.frame_count, self.cols_to_predict, self.cols_to_keep)
+        
+
+class SingleGameDataset(DatasetTemplate):
+    def __init__(self, game_name, frame_count = 1, cols_to_predict=None, cols_to_keep=None, transform=None, target_transform=None):
         """
         Pytorch dataset for a single game
         game_name: name of the game to create the dataset around e.g. 'Barbie'
@@ -110,54 +215,11 @@ class SingleGameDataset(Dataset):
         transform: optional transformation applied to (torch 2 or 3D tensor) images 
         target_transform: optional transformation to be applied to target 1D tensor
         """
-        #Default cols to predict
-        if cols_to_predict is None: cols_to_predict = ["thumbstick_left_x", "thumbstick_left_y", "thumbstick_right_x", "thumbstick_right_y"]
-
-        #set up df so each row has the current frame number and columns for previous frame numbers
+        super().__init__(frame_count, cols_to_predict, cols_to_keep, transform, target_transform)
+        
+        #Create and format the dataframe
         self.df = DataUtils.load_data_by_name(game_name)
         self.df = DataUtils.format_dataset(self.df)
-        self.df = self.df[["game_session", "frame"] + cols_to_predict]
-        for i in range(1, frame_count):
-            self.df[f"frame_{i}"] = self.df.groupby("game_session")["frame"].shift(i)
-            
-        #reorder cols and remove rows with not enough previous frames
-        self.df = self.df[["game_session", "frame"] + [f"frame_{i}" for i in range(1, frame_count)] + cols_to_predict]      
-        self.df = self.df.dropna()
-        
-        #change name of frame col to match previous frame col name
-        if frame_count > 1: self.df = self.df.rename(columns = {"frame" : "frame_0"})
+        self.df = DataUtils.ml_format(self.df, self.frame_count, self.cols_to_predict, self.cols_to_keep)
 
-        #helper function to build image dirs
-        self.get_im_dir = lambda session_name, frame: f"/data/ysun209/VR.net/videos/{session_name}/video/{frame}.jpg"        
-        
-        self.frame_count = frame_count
-        self.cols_to_predict = cols_to_predict
-        self.transform = transform
-        self.target_transform = target_transform
-        
-    def __len__(self):
-        return len(self.df)
-    
-    def __getitem__(self, index):
-        data_row = self.df.iloc[index]
-        session = data_row["game_session"]
-        
-        if self.frame_count == 1:
-            #Read single image
-            image = read_image(self.get_im_dir(session, data_row["frame"]))
-        else:
-            #read multiple images
-            image = []
-            for i in range(0, self.frame_count):
-                image.append(read_image(self.get_im_dir(session, int(data_row[f"frame_{i}"]))))
-            image = torch.from_numpy(np.array(image))
-        
-        #read target
-        target = data_row[self.cols_to_predict]
-        target = torch.from_numpy(target.to_numpy().astype(float))
-        
-        #apply transformations
-        if self.transform: image = self.transform(image)
-        if self.target_transform: target = self.target_transform(target)
-        
-        return image, target
+   
