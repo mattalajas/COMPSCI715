@@ -5,6 +5,7 @@ from fastparquet import ParquetFile
 from torch.utils.data import Dataset, DataLoader
 from torchvision.io import read_image
 import torch
+import math
 
 class DataUtils:
     @staticmethod
@@ -99,7 +100,7 @@ class DataUtils:
         df = df[col_order]          
         return df
     
-    
+    @staticmethod
     def ml_format(df, frame_count, cols_to_predict, cols_to_keep):
         """
         Formats a (formatted) data frame for training, validating and testing models
@@ -123,6 +124,39 @@ class DataUtils:
         
         return df
     
+    
+    @staticmethod
+    def write_to_txt(file_name, rows):
+        with open(file_name, 'w') as f:
+            f.writelines([row + "\n" for row in rows])
+            
+    @staticmethod
+    def read_txt(file_name):
+        with open(file_name, "r") as f:
+            lines = [line.strip("\n") for line in f.readlines()]
+        
+        return lines
+    
+    @staticmethod
+    def create_session_sets(df, train_size=0.7, val_size=0.15):
+        """
+        Creates txt files recording the game sessions in train, val and test set
+        Only includeds sessions in the supplied df
+        test_size is assumes to be 1 - train_size - val_size
+        """
+        all_sessions = df["game_session"].unique()
+        np.random.shuffle(all_sessions)
+        
+        train_stop_index = math.floor(len(all_sessions) * train_size)
+        val_stop_index = train_stop_index + math.ceil(len(all_sessions) * val_size)
+        
+        train_set = all_sessions[:train_stop_index]
+        val_set = all_sessions[train_stop_index:val_stop_index]
+        test_set = all_sessions[val_stop_index:]
+        
+        DataUtils.write_to_txt("train.txt", train_set)
+        DataUtils.write_to_txt("val.txt", val_set)
+        DataUtils.write_to_txt("test.txt", test_set)
     
 class DatasetTemplate(Dataset):
     def __init__(self, frame_count=1, cols_to_predict=None, cols_to_keep=None, transform=None, target_transform=None):
@@ -206,10 +240,11 @@ class SingleSessionDataset(DatasetTemplate):
         
 
 class SingleGameDataset(DatasetTemplate):
-    def __init__(self, game_name, frame_count = 1, cols_to_predict=None, cols_to_keep=None, transform=None, target_transform=None):
+    def __init__(self, game_name, session_set=None, frame_count = 1, cols_to_predict=None, cols_to_keep=None, transform=None, target_transform=None):
         """
         Pytorch dataset for a single game
         game_name: name of the game to create the dataset around e.g. 'Barbie'
+        session_set: list of game session names to include
         frame_count: number of frames to return with each item (1 will return the current frame, > 1 will return the current and previous frames)
         cols_to_predict: list of column names (from formated dataset) that are treated as labels/prediction targets
         transform: optional transformation applied to (torch 2 or 3D tensor) images 
@@ -220,6 +255,25 @@ class SingleGameDataset(DatasetTemplate):
         #Create and format the dataframe
         self.df = DataUtils.load_data_by_name(game_name)
         self.df = DataUtils.format_dataset(self.df)
+        
+        #if no session set provided, use all sessions
+        if session_set is None: session_set = self.df["game_session"].unique()
+        self.df = self.df[self.df["game_session"].isin(session_set)]
+        
         self.df = DataUtils.ml_format(self.df, self.frame_count, self.cols_to_predict, self.cols_to_keep)
 
-   
+
+if __name__ == "__main__":
+    #Demo for creating train, val and test sets for a game
+    
+    train_sessions = DataUtils.read_txt("COMPSCI715/datasets/barbie_demo_dataset/train.txt")
+    val_sessions = DataUtils.read_txt("COMPSCI715/datasets/barbie_demo_dataset/val.txt")
+    test_sessions = DataUtils.read_txt("COMPSCI715/datasets/barbie_demo_dataset/test.txt")
+    
+    barbie_train_set = SingleGameDataset("Barbie", train_sessions)
+    barbie_val_set = SingleGameDataset("Barbie", val_sessions)
+    barbie_test_set = SingleGameDataset("Barbie", test_sessions)
+    
+    print(f"Items in train set: {len(barbie_train_set)}")
+    print(f"Items in val set: {len(barbie_val_set)}")
+    print(f"Items in test set: {len(barbie_val_set)}")
