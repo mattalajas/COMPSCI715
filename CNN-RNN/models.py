@@ -53,7 +53,7 @@ class ConvBasic(nn.Module):
         return flat_out
     
 class LeNet(nn.Module):
-    def __init__(self, size, padding=0, kernel=5, stride=1):
+    def __init__(self, size, final_out, padding=0, kernel=5, stride=1):
         super(LeNet, self).__init__()
         self.conv1 = nn.Conv2d(in_channels=3, out_channels=6, kernel_size=kernel, stride=stride, padding=padding)
         size1 = int((size + 2*padding - kernel)/stride)+1
@@ -67,7 +67,7 @@ class LeNet(nn.Module):
         size3 = int((size2-2)/2)+1
         self.fc1 = nn.Linear(16*size3*size3, 120)
         self.fc2 = nn.Linear(120, 84)
-        self.fc3 = nn.Linear(84, 16)
+        self.fc3 = nn.Linear(84, final_out)
 
         self.initialise_weights()
     
@@ -130,13 +130,13 @@ class LeNet(nn.Module):
 
 # Model for memory module GRU
 class actionGRU(nn.Module):
-    def __init__(self):
+    def __init__(self, fin_emb, act_dim, img_dim):
         super(actionGRU, self).__init__()
         # Check input size
-        self.hid1 = nn.Linear(4, 16)
-        self.hid2 = nn.Linear(32, 128)
+        self.hid1 = nn.Linear(4, act_dim)
+        self.hid2 = nn.Linear(act_dim + img_dim, 128)
         self.batch1 = nn.BatchNorm1d(128, track_running_stats=False)
-        self.gru1 = nn.GRUCell(128, 512)
+        self.gru1 = nn.GRUCell(128, fin_emb)
     
         self.initialise_weights()
     
@@ -236,10 +236,10 @@ class actionGRUdeep(nn.Module):
 
 # Standard MLP for fina prediction
 class MLP(nn.Module):
-    def __init__(self):
+    def __init__(self, hid_size):
         super(MLP, self).__init__()
         # Check input size
-        self.hidden1 = nn.Linear(512, 256)
+        self.hidden1 = nn.Linear(hid_size, 256)
         self.hidden2 = nn.Linear(256, 64)
         self.hidden3 = nn.Linear(64, 4)
     
