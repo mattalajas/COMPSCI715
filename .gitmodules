@@ -1,6 +1,6 @@
 [submodule "c-rnn-gan.pytorch"]
 	path = c-rnn-gan.pytorch
 	url = https://github.com/HugoPhibbs/c-rnn-gan.pytorch.git
-[submodule "ViT/vit-pytorch"]
-	path = ViT/vit-pytorch
-	url = https://github.com/lucidrains/vit-pytorch.git
+[submodule "ViT/vit_pytorch"]
+	path = ViT/vit_pytorch
+	url = https://github.com/kraw084/vit_pytorch.git
