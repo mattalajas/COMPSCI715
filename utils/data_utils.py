@@ -214,7 +214,7 @@ class DatasetTemplate(Dataset):
         y = torch.from_numpy(y.to_numpy().astype(float))
         
         #apply transformations
-        if self.transform: y = self.transform(x)
+        if self.transform: x = self.transform(x)
         if self.target_transform: y = self.target_transform(y)
         
         return x, y
