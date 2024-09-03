@@ -22,7 +22,7 @@ from utils import create_train_test_split
 
 device = torch.device('mps' if torch.backends.mps.is_available() else 'cuda' if torch.cuda.is_available() else 'cpu')
 # For data collection, change to True if want to evaluate output 
-verbose = False
+verbose = True
 
 if torch.cuda.is_available():
     torch.cuda.empty_cache()
@@ -30,11 +30,11 @@ if torch.cuda.is_available():
 # seq_size = how long is each sequence, start_pred = when to start predicting thumbstick movement
 
 # Main task hyperparams
-seq_size = 30
+seq_size = 60
 batch_size = 10
-start_pred = 16
+start_pred = 30
 epochs = 250
-iter_val = 15
+iter_val = 10
 img_size = 64
 main_lr= 0.001
 regularisation = 0.0001
@@ -42,11 +42,11 @@ rnn_emb = 256
 
 # Aux task hyperparams
 hid_size = 256
-aux_steps = 15
 aux_steps = seq_size - start_pred
 sub_rate = 0.1
-loss_fac = 1
-aux_lr = 0.0005
+loss_fac = 0.5
+aux_reguarisation = 0.0001
+aux_lr = 0
 
 game_name = 'Barbie'
 dir = r"/data/mala711/COMPSCI715/Vrnet"
@@ -69,10 +69,12 @@ optimizer = torch.optim.Adam([
     {'params': init_gru.parameters()},
     {'params': fin_mlp.parameters()},
     {'params': cpca.parameters(), 'lr': aux_lr}], lr=main_lr)
-optimizer = torch.optim.Adam([
-    {'params': init_conv.parameters()},
-    {'params': init_gru.parameters()},
-    {'params': cpca.parameters(), 'lr': aux_lr}], lr=main_lr)
+# optimizer = torch.optim.Adam([
+#     {'params': init_conv.parameters()},
+#     {'params': init_gru.parameters()},
+#     {'params': cpca.parameters(), 'lr': aux_lr}], lr=main_lr)
+# optimizer = torch.optim.Adam([
+#     {'params': cpca.parameters(), 'lr': aux_lr}], lr=main_lr)
 criterion = torch.nn.MSELoss()
 
 def train(loader, optimizer, criterion):
@@ -82,6 +84,7 @@ def train(loader, optimizer, criterion):
     cpca.train()
     
     total_loss = []
+    total_aux = []
     preds = torch.empty(0)
 
     prog_bar = tqdm.tqdm(range(len(loader)))
@@ -141,36 +144,48 @@ def train(loader, optimizer, criterion):
 
         # temp_image_emb = list(range(29))
         # temp_image_emb = torch.Tensor(temp_image_emb).to(device)
-        # temp_image_emb = torch.tile(temp_image_emb, (32, 1))
+        # temp_image_emb = torch.tile(temp_image_emb, (256, 1))
         # temp_image_emb = temp_image_emb.T
 
         # temp_image_emb = torch.tile(temp_image_emb, (10, 1, 1))
         # temp_image_emb = temp_image_emb.permute(1, 0, 2)
 
-        aux_loss = 0
-        # for ind, belief in enumerate(beliefs[1:seq_size-aux_steps]):
-        #     t = ind+aux_steps+1
-        #     aux_loss += cpca.get_loss(actions[:, ind+1:t, :], image_emb[ind+1:t, :, :], 
-        #                               belief, ind+1, batch_size)
+        # temp_action_emb = list(range(30))
+        # temp_action_emb = torch.Tensor(temp_action_emb).to(device)
+        # temp_action_emb = torch.tile(temp_action_emb, (4, 1))
+        # temp_action_emb = temp_action_emb.T
+
+        # temp_action_emb = torch.tile(temp_action_emb, (10, 1, 1))
+        # # temp_action_emb = temp_action_emb.permute(1, 0, 2)
+
+        aux_losses = []
+        for ind, belief in enumerate(beliefs[1:seq_size-aux_steps]):
+            t = ind+aux_steps+1
+            aux_losses.append(cpca.get_loss(actions[:, ind+1:t, :], image_emb[ind:t-1, :, :], 
+                                      belief, batch.shape[0]))
             
-        aux_loss = cpca.get_loss(actions[:, start_pred:, :], image_emb[start_pred-1:, :, :], 
-                                    beliefs[start_pred-1], start_pred, batch_size)
+        # aux_loss = cpca.get_loss(temp_action_emb[:, start_pred:, :], temp_image_emb[start_pred-1:, :, :], 
+        #                             beliefs[start_pred-1], batch_size)
+        
+        aux_losses = torch.stack(aux_losses).to(device)
+        aux_loss = torch.mean(aux_losses)
 
         # Regularisation
         l1 = sum(p.abs().sum() for p in init_gru.parameters())
         l1 += sum(p.abs().sum() for p in init_conv.parameters())
         l1 += sum(p.abs().sum() for p in fin_mlp.parameters())
-        l1 += sum(p.abs().sum() for p in cpca.parameters())
+        aux_l1 = sum(p.abs().sum() for p in cpca.parameters())
         
         # Loss calculation, gradient calculation, then backprop
         losses = torch.mean(losses)
         # total_loss.append(losses)
 
-        losses += regularisation*l1 + aux_loss
+        losses += regularisation*l1 + aux_reguarisation*aux_l1 + aux_loss
         losses.backward()
         optimizer.step()
 
         total_loss.append(losses)
+        total_aux.append(aux_loss)
 
         prog_bar.update(1)
     prog_bar.close()
@@ -189,7 +204,7 @@ def train(loader, optimizer, criterion):
     # plt.show()
     
     # Returns evaluation scores
-    return sum(total_loss) / len(loader), total_loss, aux_loss
+    return sum(total_loss) / len(loader), total_loss, sum(total_aux) / len(loader)
 
 # Test is very similar to training
 # Instead I use RMSE and not MSE

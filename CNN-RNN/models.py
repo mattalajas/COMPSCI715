@@ -261,21 +261,19 @@ class MLP(nn.Module):
         out = self.hidden3(out)
         return out
 
+class evalMLP(nn.Module):
+    def __init__(self, grid_dims):
+        super(evalMLP, self).__init__()
+        self.x_size, self.y_size = grid_dims
+        # TODO: init input size - b_t + grid_size[0]*grid_size[1]
+        # TODO: change size to accomodate orientation
+        self.hidden1 = nn.Linear(512,  300)
+        self.relu1 = nn.ReLU()
+        self.hidden3 = nn.Linear(300, 4)
+        self.hidden4 = nn.Linear(300, self.x_size * self.y_size)
 
-# # Model isnt being used
-# class evalMLP(nn.Module):
-#     def __init__(self, grid_dims):
-#         super(evalMLP, self).__init__()
-#         self.x_size, self.y_size = grid_dims
-#         # TODO: init input size - b_t + grid_size[0]*grid_size[1]
-#         # TODO: change size to accomodate orientation
-#         self.hidden1 = nn.Linear(512,  300)
-#         self.relu1 = nn.ReLU()
-#         self.hidden3 = nn.Linear(300, 4)
-#         self.hidden4 = nn.Linear(300, self.x_size * self.y_size)
-
-#     def forward(self, x):
-#         out = self.relu1(self.hidden1(x))
-#         out_1 = self.hidden3(out)
-#         out_2 = self.hidden4(out)
-#         return out_2, out_1
+    def forward(self, x):
+        out = self.relu1(self.hidden1(x))
+        out_1 = self.hidden3(out)
+        out_2 = self.hidden4(out)
+        return out_2, out_1

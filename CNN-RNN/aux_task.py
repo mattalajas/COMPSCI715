@@ -9,6 +9,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from models import *
 from torch.distributions import kl_divergence, Categorical
 from typing import Type
 
@@ -30,14 +31,21 @@ class CPCA(nn.Module):
         self.loss_fac = loss_fac
         self.device = device
 
-        self.classifier = nn.Sequential(
+        # self.classifier = nn.Sequential(
+        #     nn.Linear(2 * hid_size, 32),
+        #     nn.ReLU(),
+        #     nn.Linear(32, 1)
+        # ) # query and perception
+
+        cpc_clf = [nn.Sequential(
             nn.Linear(2 * hid_size, 32),
             nn.ReLU(),
-            nn.Linear(32, 1)
-        ) # query and perception
+            nn.Linear(32, 1)) for _ in range(self.num_steps)]
+        
+        self.mlp = nn.ModuleList(cpc_clf)
         self.query_gru = nn.GRU(ACTION_EMBEDDING_DIM, hid_size)
 
-    def get_loss(self, actions, vision, belief_features, t, n = 1):
+    def get_loss(self, actions, vision, belief_features, n = 1):
         '''
             actions = num of actions + action embeddings
             vision = next frame embeddings 
@@ -71,35 +79,12 @@ class CPCA(nn.Module):
         positive_input = torch.cat([positives, out_all], -1)
         negative_input = torch.cat([negatives, out_all], -1)
         # Targets: predict k steps for each starting timestep
-        # positives_padded = torch.cat((positives[1:], torch.zeros(k, n, self.hid_size, device=self.device)), dim=0) # (t+k) x n
-        # positives_expanded = positives_padded.unfold(dimension=0, size=k, step=1).permute(0, 3, 1, 2) # t x k x n x -1
-        positives_logits = self.classifier(positive_input)
-        # negatives_padded = torch.cat((negatives[1:], torch.zeros(k, n, self.hid_size, device=self.device)), dim=0) # (t+k) x n x -1
-        # negatives_expanded = negatives_padded.unfold(dimension=0, size=k, step=1).permute(0, 3, 1, 2) # t x k x n x -1
-        negatives_logits = self.classifier(negative_input)
+        # positives_logits = self.classifier(positive_input)
+        # negatives_logits = self.classifier(negative_input)
 
-        # Masking
-        # Note which timesteps [1, t+k+1] could have valid queries, at distance (k) (note offset by 1)
-        # valid_modeling_queries = torch.ones(
-        #     t + k, k, n, 1, device=self.device, dtype=torch.bool
-        # ) # (padded) timestep predicted x prediction distance x env
-        # valid_modeling_queries[t - 1:] = False # >= t is past rollout, and t is index t - 1 here
-        # for j in range(1, k + 1): # for j-step predictions
-        #     valid_modeling_queries[:j - 1, j - 1] = False # first j frames cannot be valid for all envs (rollout doesn't go that early)
-        #     for env in range(n):
-        #         has_zeros_batch = env_zeros[env]
-        #         # in j-step prediction, timesteps z -> z + j are disallowed as those are the first j timesteps of a new episode
-        #         # z-> z-1 because of modeling_queries being offset by 1
-        #         for z in has_zeros_batch:
-        #             valid_modeling_queries[z-1: z-1 + j, j - 1, env] = False
+        positives_logits = torch.stack([self.mlp[i](positive_input[i].unsqueeze(0)) for i in range(k)], 1)
+        negatives_logits = torch.stack([self.mlp[i](negative_input[i].unsqueeze(0)) for i in range(k)], 1)
 
-        # instead of the whole range, we actually are only comparing a window i:i+k for each query/target i - for each, select the appropriate k
-        # we essentially gather diagonals from this full mask, t of them, k long
-        # valid_diagonals = [torch.diagonal(valid_modeling_queries, offset=-i) for i in range(t)] # pull the appropriate k per timestep
-        # valid_mask = torch.stack(valid_diagonals, dim=0).permute(0, 3, 1, 2) # t x n x 1 x k -> t x k x n x 1
-
-        # positives_masked_logits = torch.masked_select(positives_logits, valid_mask)
-        # negatives_masked_logits = torch.masked_select(negatives_logits, valid_mask)
         positive_loss = F.binary_cross_entropy_with_logits(
             positives_logits, torch.ones_like(positives_logits), reduction='none'
         )
