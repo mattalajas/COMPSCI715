@@ -42,8 +42,13 @@ class ResNet_LSTM_Model(nn.Module):
         # Stack the features along the time dimension
         features = torch.stack(features, dim=1)  # Shape: (batch_size, num_frames, num_resnet_features)
 
+        # Initialize hidden and cell states
+        batch_size = x.size(0)
+        h0 = torch.zeros(self.lstm.num_layers, batch_size, self.lstm.hidden_size).to(x.device)
+        c0 = torch.zeros(self.lstm.num_layers, batch_size, self.lstm.hidden_size).to(x.device)
+        
         # Pass the sequence of features through the LSTM
-        lstm_out, (hn, cn) = self.lstm(features)  # Shape of lstm_out: (batch_size, num_frames, lstm_hidden_size)
+        lstm_out, (hn, cn) = self.lstm(features, (h0, c0))  # Shape of lstm_out: (batch_size, num_frames, lstm_hidden_size)
 
         # Take the last output of the LSTM (or use mean pooling over time)
         lstm_last_output = lstm_out[:, -1, :]  # Shape: (batch_size, lstm_hidden_size)
@@ -96,7 +101,7 @@ criterion = nn.MSELoss()  # Use MSE for regression
 optimizer = Adam(model.parameters(), lr=1e-4)
 
 # Training loop
-num_epochs = 10
+num_epochs = 100
 
 # Training loop with validation
 for epoch in range(num_epochs):
