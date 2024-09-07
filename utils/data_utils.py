@@ -13,7 +13,22 @@ class DataUtils:
         """
         gamename: str, the name of one game to load data for, if empty, load all data.
         return: pd.DataFrame, the data loaded from the parquet files.
-        gamename = '3D_Play_House' or '98_Escapes' or 'Airplane_Obstacle' or 'American_Idol' or 'Arena_Clash' or 'Army_Men' or 'Barbie' or 'Barnyard' or 'Bobber_Bay_Fishing' or 'Bonnie_Revenge' or 'Born_With_Power' or 'Breakneck_Canyon' or 'Canyon_Runners' or 'Cartoon_Wars' or 'Circle_Kawaii' or 'Citadel' or 'City_Parkour' or 'Creature_Feature' or 'Delivery_Dash' or 'Earth_Gym' or 'Escape_Puzzle_Mansion' or 'Fight_the_Night' or 'Flight_Squad' or 'Frisbee_Golf' or 'Fun_House' or 'Geometry_Gunners' or 'Giant_Paddle_Golf' or 'Halloween_Wars' or 'Horizon_Boxing' or 'HoverTag' or 'Jail_Simulator' or 'Junior_Chef' or 'Kawaii_Daycare' or 'Kawaii_Fire_Station' or 'Kawaii_House' or 'Kawaii_Playroom' or 'Kawaii_Police_Station' or 'Kowloon' or 'Land_Beyond' or 'Live_Sandbox' or 'Man_of_Moon_Mountain' or 'Mars_Miners' or 'MB_Deja_Vu' or 'Mech_Playground' or 'Mega_Tasty_BBQ' or 'Meta_Pizza_Hut_Classic' or 'Metablocks_Adventure' or 'Metdonalds' or 'NBA_Arena' or 'New_Olympus' or 'Octopus_Bash' or 'Out_Of_Control' or 'Pirate_Life' or 'Puddles_Theme_Park' or 'Puddles_Water_Park' or 'Red_Dead' or 'Retro_Zombie' or 'Roommate' or 'Scifi_Sandbox' or 'Sky_High_Trampoline_Park' or 'Slash' or 'Slash_RPG' or 'Spy_School' or 'Super_Rumble' or 'Superhero_Arena' or 'The_aquarium' or 'Titanic_Simulation' or 'UFO_crash_site_venue' or 'Venues' or 'VR_Bank' or 'VR_Classroom' or 'Waffle_Restaurant' or 'Wake_the_Robot' or 'Walking_Dead' or 'Water_Battling' or 'Western_Skies_RPG' or 'Wild_Quest' or 'Wizard_Sandbox' or 'Wood_Warehouse' or 'Zombie' or 'Zoo_Chef_Challenge'
+        gamename = '3D_Play_House' or '98_Escapes' or 'Airplane_Obstacle' or 'American_Idol' or 
+                'Arena_Clash' or 'Army_Men' or 'Barbie' or 'Barnyard' or 'Bobber_Bay_Fishing' or 'Bonnie_Revenge' 
+                or 'Born_With_Power' or 'Breakneck_Canyon' or 'Canyon_Runners' or 'Cartoon_Wars' or 'Circle_Kawaii' 
+                or 'Citadel' or 'City_Parkour' or 'Creature_Feature' or 'Delivery_Dash' or 'Earth_Gym' or
+                'Escape_Puzzle_Mansion' or 'Fight_the_Night' or 'Flight_Squad' or 'Frisbee_Golf' or 'Fun_House' or
+                'Geometry_Gunners' or 'Giant_Paddle_Golf' or 'Halloween_Wars' or 'Horizon_Boxing' or 'HoverTag' or
+                'Jail_Simulator' or 'Junior_Chef' or 'Kawaii_Daycare' or 'Kawaii_Fire_Station' or 'Kawaii_House' or
+                'Kawaii_Playroom' or 'Kawaii_Police_Station' or 'Kowloon' or 'Land_Beyond' or 'Live_Sandbox' or
+                'Man_of_Moon_Mountain' or 'Mars_Miners' or 'MB_Deja_Vu' or 'Mech_Playground' or 'Mega_Tasty_BBQ' or
+                'Meta_Pizza_Hut_Classic' or 'Metablocks_Adventure' or 'Metdonalds' or 'NBA_Arena' or 'New_Olympus' or
+                'Octopus_Bash' or 'Out_Of_Control' or 'Pirate_Life' or 'Puddles_Theme_Park' or 'Puddles_Water_Park' or
+                'Red_Dead' or 'Retro_Zombie' or 'Roommate' or 'Scifi_Sandbox' or 'Sky_High_Trampoline_Park' or 'Slash' or
+                'Slash_RPG' or 'Spy_School' or 'Super_Rumble' or 'Superhero_Arena' or 'The_aquarium' or 'Titanic_Simulation'
+                or 'UFO_crash_site_venue' or 'Venues' or 'VR_Bank' or 'VR_Classroom' or 'Waffle_Restaurant' or 'Wake_the_Robot'
+                or 'Walking_Dead' or 'Water_Battling' or 'Western_Skies_RPG' or 'Wild_Quest' or 'Wizard_Sandbox' or
+                'Wood_Warehouse' or 'Zombie' or 'Zoo_Chef_Challenge'
         """
         file_names = [f for f in os.listdir(folder_path) if os.path.isfile(os.path.join(folder_path, f))]
         file_paths = [os.path.join(folder_path, f) for f in file_names]
@@ -254,6 +269,35 @@ class SingleGameDataset(DatasetTemplate):
         #Create and format the dataframe
         self.df = DataUtils.load_data_by_name(game_name)
         self.df = DataUtils.format_dataset(self.df)
+        
+        #if no session set provided, use all sessions
+        if session_set is None: session_set = self.df["game_session"].unique()
+        self.df = self.df[self.df["game_session"].isin(session_set)]
+        
+        self.df = DataUtils.ml_format(self.df, self.frame_count, self.cols_to_predict, self.cols_to_keep)
+
+class MultiGameDataset(DatasetTemplate):
+    def __init__(self, game_names, session_set=None, frame_count = 1, cols_to_predict=None, cols_to_keep=None, transform=None, target_transform=None):
+        """
+        Pytorch dataset for a single game
+        game_names: list of game names to create the dataset around e.g. '[Barbie]'
+        session_set: list of game session names to include
+        frame_count: number of frames to return with each item (1 will return the current frame, > 1 will return the current and previous frames)
+        cols_to_predict: list of column names (from formated dataset) that are treated as labels/prediction targets
+        transform: optional transformation applied to (torch 2 or 3D tensor) images 
+        target_transform: optional transformation to be applied to target 1D tensor
+        """
+        super().__init__(frame_count, cols_to_predict, cols_to_keep, transform, target_transform)
+        
+        dfs = []
+        #Create and format the dataframe
+        for game in game_names:
+            single_df = DataUtils.load_data_by_name(game)
+            single_df = DataUtils.format_dataset(single_df)
+
+            dfs.append(single_df)
+        
+        self.df = pd.concat(dfs, ignore_index=True)
         
         #if no session set provided, use all sessions
         if session_set is None: session_set = self.df["game_session"].unique()

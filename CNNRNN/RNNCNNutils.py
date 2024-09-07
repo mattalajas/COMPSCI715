@@ -68,6 +68,33 @@ def create_train_test_split(game_name, dir, device, seq_size = 150, batch_size =
 
     return path_map, train_loader, test_loader
 
+def filter_dataframe(game_sessions, data_frame, device, seq_size = 150, batch_size = 3, shuffle = False, iter = 1):
+    path_map = {}
+    counter = 0
+    seqs = ()
+
+    df_groups = data_frame.groupby('game_session')
+
+    for game_session in game_sessions:
+        cur_df = df_groups.get_group(game_session)
+        cur_df = cur_df[::iter]
+        cur_df = cur_df[:-(len(cur_df)%seq_size)]
+
+        path_map[counter] = game_session # f"/data/ysun209/VR.net/videos/{game_session}" #/video/{frame}.jpg"
+        cur_df['game_session'] = counter
+
+        # Split gameplay into sequences
+        cur_csv_t = torch.Tensor(cur_df.values).to(device)
+        cur_csv_t = torch.split(cur_csv_t, seq_size)
+
+        counter += 1
+        seqs = seqs + cur_csv_t
+
+    # Create batches for training and testing
+    loader = DataLoader(seqs, batch_size=batch_size, shuffle=shuffle)
+
+    return path_map, loader
+
 def image_dir_to_csv(img_path, height, width, save_path):
     df = pd.DataFrame(columns=['frame', 'R', 'G', 'B'])
 
