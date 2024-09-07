@@ -8,8 +8,7 @@ from torch.utils.data import DataLoader
 import torchvision
 from torchvision import transforms, datasets
 from torch.optim import Adam
-
-from datetime import datetime
+from tqdm import tqdm
 
 img_size = 224
 
@@ -56,10 +55,12 @@ num_epochs = 100
 
 # Training loop with validation
 for epoch in range(num_epochs):
+    print(f"Epoch {epoch+1}/{num_epochs}")
+    
     model.train()
     running_loss = 0.0
 
-    for images, targets in train_loader:
+    for images, targets in tqdm(train_loader, desc="Training", leave=False):
         images, targets = images.to(device), targets.to(device)
 
         # Zero the parameter gradients
@@ -75,21 +76,18 @@ for epoch in range(num_epochs):
 
         running_loss += loss.item()
     
-    print(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
     print(f"Epoch [{epoch+1}/{num_epochs}], Training Loss: {running_loss/len(train_loader)}")
 
     # Validation phase
     model.eval()
     val_loss = 0.0
     with torch.no_grad():
-        for images, targets in val_loader:
+        for images, targets in tqdm(val_loader, desc="Validation", leave=False):
             images, targets = images.to(device), targets.to(device)
             outputs = model(images)
-            print(outputs[0])
             loss = criterion(outputs, targets)
             val_loss += loss.item()
 
     avg_val_loss = val_loss / len(val_loader)
 
-    print(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
     print(f"Epoch [{epoch+1}/{num_epochs}], Validation Loss: {avg_val_loss}")

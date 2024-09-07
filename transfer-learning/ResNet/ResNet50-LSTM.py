@@ -8,8 +8,7 @@ from torch.utils.data import DataLoader
 import torchvision
 from torchvision import transforms, datasets
 from torch.optim import Adam
-
-from datetime import datetime
+from tqdm import tqdm
 
 class ResNet_LSTM_Model(nn.Module):
     def __init__(self, pre_trained_model, lstm_hidden_size=512, lstm_num_layers=1, num_classes=4, num_frames=12):
@@ -105,10 +104,12 @@ num_epochs = 100
 
 # Training loop with validation
 for epoch in range(num_epochs):
+    print(f"Epoch {epoch+1}/{num_epochs}")
+
     model.train()
     running_loss = 0.0
 
-    for images, targets in train_loader:
+    for images, targets in tqdm(train_loader, desc="Training", leave=False):
         images, targets = images.to(device), targets.to(device)
 
         # Zero the parameter gradients
@@ -131,7 +132,7 @@ for epoch in range(num_epochs):
     model.eval()
     val_loss = 0.0
     with torch.no_grad():
-        for images, targets in val_loader:
+        for images, targets in tqdm(val_loader, desc="Validation", leave=False):
             images, targets = images.to(device), targets.to(device)
             outputs = model(images)
             loss = criterion(outputs, targets)
