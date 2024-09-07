@@ -29,8 +29,8 @@ val_sessions = data_utils.DataUtils.read_txt("/data/ysun209/app/0_git/COMPSCI715
 val_set = data_utils.SingleGameDataset("Barbie", val_sessions, transform=transform, cols_to_predict=cols_to_predict_value)
 
 
-train_loader = DataLoader(train_set, batch_size=128)
-val_loader = DataLoader(val_set, batch_size=128)
+train_loader = DataLoader(train_set, batch_size=128, shuffle=True, num_workers=4, pin_memory=True)
+val_loader = DataLoader(val_set, batch_size=128, shuffle=True, num_workers=4, pin_memory=True)
 
 # Set device (GPU if available, else CPU)
 device = torch.device("cuda:3" if torch.cuda.is_available() else "cpu")
