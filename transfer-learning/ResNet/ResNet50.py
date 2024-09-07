@@ -1,8 +1,6 @@
 import sys
 sys.path.insert(0, '/data/ysun209/app/0_python/COMPSCI715')
 import utils.data_utils as data_utils
-
-
 import torch
 import torch.nn as nn
 import timm
@@ -61,9 +59,7 @@ for epoch in range(num_epochs):
     model.train()
     running_loss = 0.0
 
-    index_test = 0
     for images, targets in train_loader:
-        index_test = index_test+1
         images, targets = images.to(device), targets.to(device)
 
         # Zero the parameter gradients
@@ -80,7 +76,6 @@ for epoch in range(num_epochs):
         running_loss += loss.item()
     
     print(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-    print(index_test)
     print(f"Epoch [{epoch+1}/{num_epochs}], Training Loss: {running_loss/len(train_loader)}")
 
     # Validation phase
