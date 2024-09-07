@@ -1,3 +1,4 @@
+import os
 import sys
 sys.path.insert(0, '/data/ysun209/app/0_python/COMPSCI715')
 import utils.data_utils as data_utils
@@ -9,6 +10,7 @@ import torchvision
 from torchvision import transforms, datasets
 from torch.optim import Adam
 from tqdm import tqdm
+from torch.utils.tensorboard import SummaryWriter
 
 img_size = 224
 
@@ -50,6 +52,10 @@ for param in model.parameters():
 criterion = nn.MSELoss()  # Use MSE for regression
 optimizer = Adam(model.parameters(), lr=1e-4)
 
+# Initialize TensorBoard writer
+current_file_name = os.path.splitext(os.path.basename(__file__))[0]
+writer = SummaryWriter(log_dir=f"./runs/{current_file_name}")
+
 # Training loop
 num_epochs = 100
 
@@ -77,6 +83,7 @@ for epoch in range(num_epochs):
         running_loss += loss.item()
     
     print(f"Epoch [{epoch+1}/{num_epochs}], Training Loss: {running_loss/len(train_loader)}")
+    writer.add_scalar('Training Loss', running_loss / len(train_loader), epoch)
 
     # Validation phase
     model.eval()
@@ -91,3 +98,4 @@ for epoch in range(num_epochs):
     avg_val_loss = val_loss / len(val_loader)
 
     print(f"Epoch [{epoch+1}/{num_epochs}], Validation Loss: {avg_val_loss}")
+    writer.add_scalar('Validation Loss', avg_val_loss, epoch)
