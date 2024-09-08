@@ -177,21 +177,25 @@ class actionGRU(nn.Module):
         x = self.drop2(x)
         
         x = F.relu(self.batch1(self.hid2(x)))
-
         x = self.drop3(x)
+        
         # Feeds concatenated vector to GRU alongside hidden layer output
         out = self.gru1(x, h0)
         return out
 
 # Model for memory module (LSTM)
 class actionLSTM(nn.Module):
-    def __init__(self):
+    def __init__(self, fin_emb, act_dim, img_dim, dropout = 0):
         super(actionLSTM, self).__init__()
         # Check input size
-        self.hid1 = nn.Linear(4, 16)
-        self.hid2 = nn.Linear(32, 128)
+        self.hid1 = nn.Linear(4, act_dim)
+        self.hid2 = nn.Linear(act_dim + img_dim, 128)
         self.batch1 = nn.BatchNorm1d(128, track_running_stats=False)
-        self.lstm1 = nn.LSTMCell(128, 512)
+        self.lstm1 = nn.LSTMCell(128, fin_emb)
+
+        self.drop1 = nn.Dropout(p = dropout)
+        self.drop2 = nn.Dropout(p = dropout)
+        self.drop3 = nn.Dropout(p = dropout)
     
         self.initialise_weights()
     
@@ -211,10 +215,15 @@ class actionLSTM(nn.Module):
     def forward(self, image, action, h0, c0):
         # Encodes thumbstick output using MLP
         act_emb = F.relu(self.hid1(action))
+        act_emb = self.drop1(act_emb)
+
         # Concatenates thumbstick encoding and image encoding
         x = torch.cat((image, act_emb), dim=1)
         x = x.reshape((h0.shape[0], -1))
+        x = self.drop2(x)
+
         x = F.relu(self.batch1(self.hid2(x)))
+        x = self.drop3(x)
 
         # Feeds concatenated vector to LSTM alongside hidden layer and cell state
         hx, cx = self.lstm1(x, (h0, c0))

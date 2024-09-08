@@ -17,14 +17,14 @@ from torch.utils.data import DataLoader, TensorDataset
 from torch.utils.tensorboard import SummaryWriter
 
 from aux_task import CPCA
-from models import MLP, LeNet, actionGRUdeep, actionGRU
+from models import MLP, LeNet, actionLSTM
 from RNNCNNutils import *
 from data_utils_copy import *
 from string import Template
 
 device = torch.device('mps' if torch.backends.mps.is_available() else 'cuda' if torch.cuda.is_available() else 'cpu')
 # For data collection, change to True if want to evaluate output 
-verbose = True
+verbose = False
 
 if torch.cuda.is_available():
     torch.cuda.empty_cache()
@@ -49,8 +49,8 @@ loss_fac = 0.5
 aux_reguarisation = 0
 aux_lr = 0.01
 
-train_game_names = ['Barbie', 'Wild_Quest', 'Circle_Kawaii']
-test_game_names = ['Earth_Gym']
+train_game_names = ['Barbie', 'Earth_Gym', 'Wild_Quest']
+test_game_names = ['Barbie']
 val_game_names = ['Barbie']
 image_path = Template("/data/ysun209/VR.net/videos/${game_session}/video/${imgind}.jpg")
 
@@ -67,18 +67,18 @@ train_path_map, train_loader = filter_dataframe(train_sessions, train_set.df, de
 test_path_map, test_loader = filter_dataframe(test_sessions, test_set.df, device, seq_size, batch_size, iter=iter_val)
 
 # Run tensorboard summary writer
-if verbose: writer = SummaryWriter(f'/data/mala711/COMPSCI715/CNNRNN/runs/GRU_CPCA_train_{train_game_names}_test_{test_game_names}_init_test_seq_size_{seq_size}_seqstart_{start_pred}_iter_{iter_val}_reg_{regularisation}_auxreg_{aux_reguarisation}_lr_{main_lr}_auxlr_{aux_lr}_dropout_{dropout}')
+if verbose: writer = SummaryWriter(f'/data/mala711/COMPSCI715/CNNRNN/runs/LSTM_CPCA_train_{train_game_names}_test_{test_game_names}_init_test_seq_size_{seq_size}_seqstart_{start_pred}_iter_{iter_val}_reg_{regularisation}_auxreg_{aux_reguarisation}_lr_{main_lr}_auxlr_{aux_lr}_dropout_{dropout}')
 
 # Initialise models
 init_conv = LeNet(img_size, hid_size, dropout=dropout).to(device)
-init_gru = actionGRU(rnn_emb, hid_size, hid_size, dropout).to(device)
+init_lstm = actionLSTM(rnn_emb, hid_size, hid_size, dropout).to(device)
 fin_mlp = MLP(hid_size, dropout).to(device)
 cpca = CPCA(hid_size, aux_steps, sub_rate, loss_fac, dropout, device).to(device)
 
 # Initialise optimiser and loss function
 optimizer = torch.optim.Adam([
     {'params': init_conv.parameters()},
-    {'params': init_gru.parameters()},
+    {'params': init_lstm.parameters()},
     {'params': fin_mlp.parameters()},
     {'params': cpca.parameters(), 'lr': aux_lr}], lr=main_lr)
 # optimizer = torch.optim.Adam([
@@ -90,7 +90,7 @@ optimizer = torch.optim.Adam([
 criterion = torch.nn.MSELoss()
 
 def train(loader, path_map, optimizer, criterion):
-    init_gru.train()
+    init_lstm.train()
     init_conv.train()
     fin_mlp.train()
     cpca.train()
@@ -105,6 +105,9 @@ def train(loader, path_map, optimizer, criterion):
         # Need to initialise the hidden state for GRU
         h0 = torch.empty((batch.shape[0], hid_size)).to(device)
         h0 = torch.nn.init.xavier_uniform_(h0)
+
+        c0 = torch.zeros((batch.shape[0], hid_size)).to(device)
+        c0 = torch.nn.init.xavier_uniform_(c0)
 
         image_emb = []
         beliefs = []
@@ -134,7 +137,7 @@ def train(loader, path_map, optimizer, criterion):
             image_emb.append(copy.deepcopy(image_r.detach()))
 
             # GRU step per image and its associated thumbstick comman
-            h0 = init_gru(image_r, batch[:, seq, 2:], h0)
+            h0, c0 = init_lstm(image_r, batch[:, seq, 2:], h0, c0)
             beliefs.append(copy.deepcopy(h0.detach()))
 
             # Final prediction for each frame 
@@ -184,7 +187,7 @@ def train(loader, path_map, optimizer, criterion):
         aux_loss = torch.mean(aux_losses)
 
         # Regularisation
-        l1 = sum(p.abs().sum() for p in init_gru.parameters())
+        l1 = sum(p.abs().sum() for p in init_lstm.parameters())
         l1 += sum(p.abs().sum() for p in init_conv.parameters())
         l1 += sum(p.abs().sum() for p in fin_mlp.parameters())
         aux_l1 = sum(p.abs().sum() for p in cpca.parameters())
@@ -223,7 +226,7 @@ def train(loader, path_map, optimizer, criterion):
 # Instead I use RMSE and not MSE
 # I also used torch no grad to be space efficient
 def test(loader, path_map, criterion):
-    init_gru.eval()
+    init_lstm.eval()
     init_conv.eval()
     fin_mlp.eval()
     cpca.eval()
@@ -237,6 +240,9 @@ def test(loader, path_map, criterion):
         for batch in loader:
             h0 = torch.ones((batch.shape[0], hid_size)).to(device)
             h0 = torch.nn.init.xavier_uniform_(h0)
+
+            c0 = torch.zeros((batch.shape[0], hid_size)).to(device)
+            c0 = torch.nn.init.xavier_uniform_(c0)
 
             losses = torch.empty(0).to(device)
 
@@ -257,7 +263,7 @@ def test(loader, path_map, criterion):
                 image_t = torch.Tensor(image_t).to(device)
 
                 image_r = init_conv(image_t)
-                h0 = init_gru(image_r, batch[:, seq, 2:], h0)
+                h0, c0 = init_lstm(image_r, batch[:, seq, 2:], h0, c0)
 
                 fin = fin_mlp(h0)
 
