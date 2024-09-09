@@ -6,6 +6,7 @@ from torch.utils.data import Dataset, DataLoader
 from torchvision.io import read_image
 import torch
 import math
+import random
 
 class DataUtils:
     @staticmethod
@@ -182,6 +183,10 @@ class DatasetTemplate(Dataset):
     
     def __len__(self):
         return len(self.df)
+
+    @property
+    def num_pred_features(self):
+        return len(self.cols_to_predict)
     
     def __getitem__(self, index):
         """
@@ -236,7 +241,38 @@ class SingleSessionDataset(DatasetTemplate):
         self.df = DataUtils.format_dataset(self.df)
         self.df = self.df[self.df["game_session"] == session_name]
         self.df = DataUtils.ml_format(self.df, self.frame_count, self.cols_to_predict, self.cols_to_keep)
-        
+
+class SingleGameDatasetRandomChoose(DatasetTemplate):
+    def __init__(self, game_name, session_set=None, frame_count = 1, cols_to_predict=None, cols_to_keep=None, transform=None, target_transform=None):
+        """
+        Pytorch dataset for a single game
+        game_name: name of the game to create the dataset around e.g. 'Barbie'
+        session_set: list of game session names to include
+        frame_count: number of frames to return with each item (1 will return the current frame, > 1 will return the current and previous frames)
+        cols_to_predict: list of column names (from formated dataset) that are treated as labels/prediction targets
+        transform: optional transformation applied to (torch 2 or 3D tensor) images
+        target_transform: optional transformation to be applied to target 1D tensor
+        """
+        super().__init__(frame_count, cols_to_predict, cols_to_keep, transform, target_transform)
+
+        #Create and format the dataframe
+        self.df = DataUtils.load_data_by_name(game_name)
+        self.df = DataUtils.format_dataset(self.df)
+
+        #if no session set provided, use all sessions
+        if session_set is None:
+            self.session_set = self.df["game_session"].unique()
+        else:
+            self.session_set = session_set
+        self.df = self.df[self.df["game_session"].isin(session_set)]
+
+        self.df = DataUtils.ml_format(self.df, self.frame_count, self.cols_to_predict, self.cols_to_keep)
+
+
+    # def __getitem__(self, _):
+    #     random_session = random.choice(self.session_set)
+    #
+
 
 class SingleGameDataset(DatasetTemplate):
     def __init__(self, game_name, session_set=None, frame_count = 1, cols_to_predict=None, cols_to_keep=None, transform=None, target_transform=None):
