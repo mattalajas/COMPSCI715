@@ -25,10 +25,10 @@ def process_batch(batch_X, batch_Y, model, loss_func, opt):
     opt.zero_grad()
     
     return loss.item()
-    
+  
 
 def train_model(model, train_dataset, val_dataset, epochs, batch_size, loss_func, opt, device, save_path, resume=None):
-    dataloader = torch.utils.data.dataloader.DataLoader(train_dataset, batch_size=batch_size)
+    dataloader = torch.utils.data.dataloader.DataLoader(train_dataset, batch_size=batch_size, num_workers=4)
     
     tboard = SummaryWriter(save_path)
     
@@ -43,17 +43,26 @@ def train_model(model, train_dataset, val_dataset, epochs, batch_size, loss_func
         batch_loss = 0
         progress_bar = tqdm(dataloader, desc = f"Epoch {i}/{epochs}", bar_format = "{l_bar}{bar:20}{r_bar}")
         
+        #s = time.time()
         for X, Y in progress_bar:
             X, Y = X.to(device), Y.to(device)
+            #print("\nload data time:", time.time() - s)
+            
+            #s2 = time.time()
+                    
             batch_loss = process_batch(X, Y, model, loss_func, opt)
             epoch_loss += batch_loss
             
+            #print("process batch time:", time.time() - s2)
+            
             progress_bar.set_postfix({"loss": batch_loss})
+            
+            #s = time.time()
             
         tboard.add_scalar("Loss/train", epoch_loss/len(dataloader), i)
         print(f"Epoch {i} finished - Avg loss: {epoch_loss/len(dataloader)}\n")
         
-        if i % 10 == 0 and i != 0:
+        if i % 1 == 0 and i != 0:
             eval_loss = evaluate_model(model, val_dataset, batch_size, loss_func, device)
             print(f"Validation loss (MSE) after epoch {i}: {eval_loss}\n")
             
@@ -66,8 +75,7 @@ def train_model(model, train_dataset, val_dataset, epochs, batch_size, loss_func
 
 def evaluate_model(model, dataset, batch_size, loss_func, device):
     model.eval()
-    dataloader = torch.utils.data.dataloader.DataLoader(dataset, batch_size=batch_size)
-    
+    dataloader = torch.utils.data.dataloader.DataLoader(dataset, batch_size=batch_size, num_workers=4)
     total_loss = 0
     with torch.no_grad():
         for X, Y in tqdm(dataloader, desc = "Evaluating model", bar_format = "{l_bar}{bar:20}{r_bar}"):
@@ -93,7 +101,7 @@ if __name__ == "__main__":
     val_set = d_u.SingleGameDataset("Barbie", val_sessions, transform=x_transform)
 
     #select device
-    gpu_num = 5
+    gpu_num = 4
     device = torch.device(f'cuda:{gpu_num}')
     print(f"Using device {gpu_num}: {torch.cuda.get_device_properties(gpu_num).name}")
     
@@ -107,24 +115,25 @@ if __name__ == "__main__":
                 mlp_dim = 2048,
                 dropout = 0.1,
                 emb_dropout = 0.1).to(device)
+    
 
     lr = 1e-4
     loss_func = torch.nn.MSELoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     
-    save_dir = "models/vit_v1"
+    save_dir = "models/vit_v2"
     
     #train the model
     train_model(model = model,
                 train_dataset = train_set,
                 val_dataset = val_set,
-                epochs = 50,
+                epochs = 100,
                 batch_size = 128,
                 loss_func = loss_func,
                 opt = optimizer,
                 device = device,
                 save_path = save_dir,
-                resume = 18)
+                resume = None)
 
 
 
