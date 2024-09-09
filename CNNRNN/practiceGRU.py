@@ -15,8 +15,8 @@ from sklearn.metrics import (average_precision_score, roc_auc_score,
 from torch.utils.data import DataLoader, TensorDataset
 from torch.utils.tensorboard import SummaryWriter
 
-from models import MLP, LeNet, actionLSTM, actionGRU
-from utils import create_train_test_split
+from models import MLP, LeNet, actionGRUdeep, actionGRU
+from RNNCNNutils import create_train_test_split
 
 device = torch.device('mps' if torch.backends.mps.is_available() else 'cuda' if torch.cuda.is_available() else 'cpu')
 # For data collection, change to True if want to evaluate output 
@@ -32,8 +32,8 @@ start_pred = 16
 epochs = 150
 iter_val = 15
 img_size = 64
-learning_rate = 0.01
-regularisation = 0.0001
+learning_rate = 0.001
+regularisation = 0.001
 
 game_name = 'Barbie'
 dir = r"/data/mala711/COMPSCI715/Vrnet"
@@ -42,21 +42,21 @@ dir = r"/data/mala711/COMPSCI715/Vrnet"
 path_map, train_loader, test_loader = create_train_test_split(game_name, dir, device, seq_size=seq_size, batch_size=batch_size, iter=iter_val)
 
 # Run tensorboard summary writer
-if verbose: writer = SummaryWriter(f'/data/mala711/COMPSCI715/CNN-RNN/runs/LSTM_{game_name}_init_test2_seq_size_{seq_size}_seqstart_{start_pred}_iter_{iter_val}_reg_{regularisation}_lr_{learning_rate}')
+if verbose: writer = SummaryWriter(f'/data/mala711/COMPSCI715/CNNRNN/runs/GRU_{game_name}_init_test2_seq_size_{seq_size}_seqstart_{start_pred}_iter_{iter_val}_reg_{regularisation}_lr_{learning_rate}')
 
 # Initialise models
 init_conv = LeNet(img_size).to(device)
-init_lstm = actionLSTM().to(device)
+init_gru = actionGRU().to(device)
 fin_mlp = MLP().to(device)
 
 # Initialise optimiser and loss function
 optimizer = torch.optim.Adam(
-    set(init_conv.parameters()) | set(init_lstm.parameters())
+    set(init_conv.parameters()) | set(init_gru.parameters())
     | set(fin_mlp.parameters()), lr=learning_rate)
 criterion = torch.nn.MSELoss()
 
 def train(loader, optimizer, criterion):
-    init_lstm.train()
+    init_gru.train()
     init_conv.train()
     fin_mlp.train()
     
@@ -66,12 +66,9 @@ def train(loader, optimizer, criterion):
     prog_bar = tqdm.tqdm(range(len(loader)))
     for batch in loader:
         optimizer.zero_grad()
-        # Need to initialise the hidden state for LSTM
-        h0 = torch.zeros((batch.shape[0], 512)).to(device)
+        # Need to initialise the hidden state for GRU
+        h0 = torch.empty((batch.shape[0], 512)).to(device)
         h0 = torch.nn.init.xavier_uniform_(h0)
-
-        c0 = torch.zeros((batch.shape[0], 512)).to(device)
-        c0 = torch.nn.init.xavier_uniform_(c0)
 
         losses = torch.empty(0).to(device)
 
@@ -96,7 +93,7 @@ def train(loader, optimizer, criterion):
             image_r = init_conv(image_t)
 
             # GRU step per image and its associated thumbstick comman
-            h0, c0 = init_lstm(image_r, batch[:, seq, 2:], h0, c0)
+            h0 = init_gru(image_r, batch[:, seq, 2:], h0)
 
             # Final prediction for each frame 
             fin = fin_mlp(h0)
@@ -112,12 +109,13 @@ def train(loader, optimizer, criterion):
                 preds = torch.cat((preds, y.cpu()))
 
         # Regularisation
-        l1 = sum(p.abs().sum() for p in init_lstm.parameters())
+        l1 = sum(p.abs().sum() for p in init_gru.parameters())
         l1 += sum(p.abs().sum() for p in init_conv.parameters())
         l1 += sum(p.abs().sum() for p in fin_mlp.parameters())
         
         # Loss calculation, gradient calculation, then backprop
         losses = torch.mean(losses)
+        # total_loss.append(losses)
 
         losses += regularisation*l1
         losses.backward()
@@ -142,15 +140,13 @@ def train(loader, optimizer, criterion):
     # plt.show()
     
     # Returns evaluation scores
-    if loader == 0: raise
-    if sum(total_loss) == 0: raise
     return sum(total_loss) / len(loader), total_loss
 
 # Test is very similar to training
 # Instead I use RMSE and not MSE
 # I also used torch no grad to be space efficient
 def test(loader, criterion):
-    init_lstm.eval()
+    init_gru.eval()
     init_conv.eval()
     fin_mlp.eval()
 
@@ -161,11 +157,8 @@ def test(loader, criterion):
 
     with torch.no_grad():
         for batch in loader:
-            h0 = torch.zeros((batch.shape[0], 512)).to(device)
+            h0 = torch.ones((batch.shape[0], 512)).to(device)
             h0 = torch.nn.init.xavier_uniform_(h0)
-            
-            c0 = torch.zeros((batch.shape[0], 512)).to(device)
-            c0 = torch.nn.init.xavier_uniform_(c0)
 
             losses = torch.empty(0).to(device)
 
@@ -186,7 +179,7 @@ def test(loader, criterion):
                 image_t = torch.Tensor(image_t).to(device)
 
                 image_r = init_conv(image_t)
-                h0, c0 = init_lstm(image_r, batch[:, seq, 2:], h0, c0)
+                h0 = init_gru(image_r, batch[:, seq, 2:], h0)
 
                 fin = fin_mlp(h0)
 

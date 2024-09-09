@@ -12,7 +12,6 @@ import torch.utils.data
 import tqdm
 from torch.utils.data import DataLoader, TensorDataset
 
-
 # Model for Image classification
 class ConvBasic(nn.Module):
     def __init__(self):
@@ -46,33 +45,36 @@ class ConvBasic(nn.Module):
         out = F.relu(self.conv1(x))
         out = F.relu(self.conv2(out))
         flat_out = out.reshape((x.shape[0], -1))
-
+        
         # Final encoding to transform 2 dim conv output to a single vector
         flat_out = F.relu(self.hidden1(flat_out))
         flat_out = F.relu(self.hidden2(flat_out))
         flat_out = self.hidden3(flat_out)
         return flat_out
-
-
+    
 class LeNet(nn.Module):
-    def __init__(self, size, final_out, padding=0, kernel=5, stride=1):
+    def __init__(self, size, final_out, padding=0, kernel=5, stride=1, dropout=0):
         super(LeNet, self).__init__()
         self.conv1 = nn.Conv2d(in_channels=3, out_channels=6, kernel_size=kernel, stride=stride, padding=padding)
-        size1 = int((size + 2 * padding - kernel) / stride) + 1
+        size1 = int((size + 2*padding - kernel)/stride)+1
         self.batch1 = nn.BatchNorm2d(6, size1, size1, track_running_stats=False)
 
         self.conv2 = nn.Conv2d(in_channels=6, out_channels=16, kernel_size=kernel, stride=stride, padding=padding)
-        size2 = int((size1 - 2) / 2) + 1
-        size2 = int((size2 + 2 * padding - kernel) / stride) + 1
+        size2 = int((size1-2)/2)+1
+        size2 = int((size2 + 2*padding - kernel)/stride)+1
         self.batch2 = nn.BatchNorm2d(16, size2, size2, track_running_stats=False)
 
-        size3 = int((size2 - 2) / 2) + 1
-        self.fc1 = nn.Linear(16 * size3 * size3, 120)
+        size3 = int((size2-2)/2)+1
+        self.fc1 = nn.Linear(16*size3*size3, 120)
         self.fc2 = nn.Linear(120, 84)
         self.fc3 = nn.Linear(84, final_out)
 
-        self.initialise_weights()
+        self.drop1 = nn.Dropout(p = dropout)
+        self.drop2 = nn.Dropout(p = dropout)
+        self.drop3 = nn.Dropout(p = dropout)
 
+        self.initialise_weights()
+    
     def initialise_weights(self):
         torch.nn.init.xavier_uniform_(self.conv1.weight)
         torch.nn.init.zeros_(self.conv1.bias)
@@ -88,18 +90,23 @@ class LeNet(nn.Module):
 
         torch.nn.init.xavier_uniform_(self.fc2.weight)
         torch.nn.init.zeros_(self.fc2.bias)
+        
 
     def forward(self, x):
-        out = F.relu(self.batch1(self.conv1(x)))
+        out = self.drop1(x)
+        out = F.relu(self.batch1(self.conv1(out)))
         out = F.max_pool2d(out, 2)
+
+        out = self.drop2(out)
         out = F.relu(self.batch2(self.conv2(out)))
         out = F.max_pool2d(out, 2)
         out = out.reshape(out.size(0), -1)
+
+        out = self.drop3(out)
         out = F.relu(self.fc1(out))
         out = F.relu(self.fc2(out))
         out = self.fc3(out)
         return out
-
 
 # This model isnt being used
 # class GridObservationMLP(nn.Module):
@@ -132,7 +139,7 @@ class LeNet(nn.Module):
 
 # Model for memory module GRU
 class actionGRU(nn.Module):
-    def __init__(self, fin_emb, act_dim, img_dim):
+    def __init__(self, fin_emb, act_dim, img_dim, dropout = 0):
         super(actionGRU, self).__init__()
         # Check input size
         self.hid1 = nn.Linear(4, act_dim)
@@ -140,8 +147,12 @@ class actionGRU(nn.Module):
         self.batch1 = nn.BatchNorm1d(128, track_running_stats=False)
         self.gru1 = nn.GRUCell(128, fin_emb)
 
+        self.drop1 = nn.Dropout(p = dropout)
+        self.drop2 = nn.Dropout(p = dropout)
+        self.drop3 = nn.Dropout(p = dropout)
+    
         self.initialise_weights()
-
+    
     def initialise_weights(self):
         torch.nn.init.xavier_uniform_(self.hid1.weight)
         torch.nn.init.zeros_(self.hid1.bias)
@@ -158,29 +169,36 @@ class actionGRU(nn.Module):
     def forward(self, image, action, h0):
         # Encodes thumbstick output using MLP
         act_emb = F.relu(self.hid1(action))
+        act_emb = self.drop1(act_emb)
 
         # Concatenates thumbstick encoding and image encoding
         x = torch.cat((image, act_emb), dim=1)
         x = x.reshape((h0.shape[0], -1))
+        x = self.drop2(x)
+        
         x = F.relu(self.batch1(self.hid2(x)))
-
+        x = self.drop3(x)
+        
         # Feeds concatenated vector to GRU alongside hidden layer output
         out = self.gru1(x, h0)
         return out
 
-
 # Model for memory module (LSTM)
 class actionLSTM(nn.Module):
-    def __init__(self):
+    def __init__(self, fin_emb, act_dim, img_dim, dropout = 0):
         super(actionLSTM, self).__init__()
         # Check input size
-        self.hid1 = nn.Linear(4, 16)
-        self.hid2 = nn.Linear(32, 128)
+        self.hid1 = nn.Linear(4, act_dim)
+        self.hid2 = nn.Linear(act_dim + img_dim, 128)
         self.batch1 = nn.BatchNorm1d(128, track_running_stats=False)
-        self.lstm1 = nn.LSTMCell(128, 512)
+        self.lstm1 = nn.LSTMCell(128, fin_emb)
 
+        self.drop1 = nn.Dropout(p = dropout)
+        self.drop2 = nn.Dropout(p = dropout)
+        self.drop3 = nn.Dropout(p = dropout)
+    
         self.initialise_weights()
-
+    
     def initialise_weights(self):
         torch.nn.init.xavier_uniform_(self.hid1.weight)
         torch.nn.init.zeros_(self.hid1.bias)
@@ -197,15 +215,19 @@ class actionLSTM(nn.Module):
     def forward(self, image, action, h0, c0):
         # Encodes thumbstick output using MLP
         act_emb = F.relu(self.hid1(action))
+        act_emb = self.drop1(act_emb)
+
         # Concatenates thumbstick encoding and image encoding
         x = torch.cat((image, act_emb), dim=1)
         x = x.reshape((h0.shape[0], -1))
+        x = self.drop2(x)
+
         x = F.relu(self.batch1(self.hid2(x)))
+        x = self.drop3(x)
 
         # Feeds concatenated vector to LSTM alongside hidden layer and cell state
         hx, cx = self.lstm1(x, (h0, c0))
-        return hx, cx
-
+        return hx, cx 
 
 class actionGRUdeep(nn.Module):
     def __init__(self):
@@ -213,13 +235,13 @@ class actionGRUdeep(nn.Module):
         # Check input size
         self.hid1 = nn.Linear(4, 12)
         self.rel1 = nn.ReLU(inplace=False)
-
+        
         self.hid2 = nn.Linear(12, 16)
         self.rel2 = nn.ReLU(inplace=False)
 
         self.hid3 = nn.Linear(32, 128)
         self.rel3 = nn.ReLU(inplace=False)
-
+        
         self.gru1 = nn.GRUCell(128, 512)
         self.rel4 = nn.ReLU(inplace=False)
 
@@ -238,15 +260,18 @@ class actionGRUdeep(nn.Module):
         out = self.rel4(self.gru1(x, h0))
         return out
 
-
 # Standard MLP for fina prediction
 class MLP(nn.Module):
-    def __init__(self, hid_size):
+    def __init__(self, hid_size, dropout = 0):
         super(MLP, self).__init__()
         # Check input size
         self.hidden1 = nn.Linear(hid_size, 256)
         self.hidden2 = nn.Linear(256, 64)
         self.hidden3 = nn.Linear(64, 4)
+
+        self.drop1 = nn.Dropout(p = dropout)
+        self.drop2 = nn.Dropout(p = dropout)
+        self.drop3 = nn.Dropout(p = dropout)
 
         self.initialise_weights()
 
@@ -261,11 +286,15 @@ class MLP(nn.Module):
         torch.nn.init.zeros_(self.hidden3.bias)
 
     def forward(self, x):
-        out = F.relu(self.hidden1(x))
+        out = self.drop1(x)
+        out = F.relu(self.hidden1(out))
+
+        out = self.drop2(out)
         out = F.relu(self.hidden2(out))
+        
+        out = self.drop3(out)
         out = self.hidden3(out)
         return out
-
 
 class evalMLP(nn.Module):
     def __init__(self, grid_dims):
@@ -273,7 +302,7 @@ class evalMLP(nn.Module):
         self.x_size, self.y_size = grid_dims
         # TODO: init input size - b_t + grid_size[0]*grid_size[1]
         # TODO: change size to accomodate orientation
-        self.hidden1 = nn.Linear(512, 300)
+        self.hidden1 = nn.Linear(512,  300)
         self.relu1 = nn.ReLU()
         self.hidden3 = nn.Linear(300, 4)
         self.hidden4 = nn.Linear(300, self.x_size * self.y_size)

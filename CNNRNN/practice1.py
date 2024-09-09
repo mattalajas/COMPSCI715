@@ -16,7 +16,7 @@ from torch.utils.data import DataLoader, TensorDataset
 from torch.utils.tensorboard import SummaryWriter
 
 from models import MLP, ConvBasic, actionGRU
-from utils import create_train_test_split
+from RNNCNNutils import create_train_test_split
 
 device = torch.device('mps' if torch.backends.mps.is_available() else 'cuda' if torch.cuda.is_available() else 'cpu')
 # For data collection, change to True if want to evaluate output 

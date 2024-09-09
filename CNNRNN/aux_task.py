@@ -22,7 +22,7 @@ class CPCA(nn.Module):
     """ Action-conditional CPC - up to k timestep prediction
         From: https://arxiv.org/abs/1811.06407
     """
-    def __init__(self, hid_size, num_steps, sub_rate, loss_fac, device):
+    def __init__(self, hid_size, num_steps, sub_rate, loss_fac, dropout, device):
         super(CPCA, self).__init__()
 
         self.hid_size = hid_size
@@ -38,6 +38,7 @@ class CPCA(nn.Module):
         # ) # query and perception
 
         cpc_clf = [nn.Sequential(
+            nn.Dropout(dropout),
             nn.Linear(2 * hid_size, 32),
             nn.ReLU(),
             nn.Linear(32, 1)) for _ in range(self.num_steps)]
