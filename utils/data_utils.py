@@ -305,6 +305,32 @@ class MultiGameDataset(DatasetTemplate):
         
         self.df = DataUtils.ml_format(self.df, self.frame_count, self.cols_to_predict, self.cols_to_keep)
 
+def filter_dataframe(game_sessions, data_frame, device, seq_size = 150, batch_size = 3, shuffle = False, iter = 1):
+    path_map = {}
+    counter = 0
+    seqs = ()
+
+    df_groups = data_frame.groupby('game_session')
+
+    for game_session in game_sessions:
+        cur_df = df_groups.get_group(game_session)
+        cur_df = cur_df[::iter]
+        cur_df = cur_df[:-(len(cur_df)%seq_size)]
+
+        path_map[counter] = game_session # f"/data/ysun209/VR.net/videos/{game_session}" #/video/{frame}.jpg"
+        cur_df['game_session'] = counter
+
+        # Split gameplay into sequences
+        cur_csv_t = torch.Tensor(cur_df.values).to(device)
+        cur_csv_t = torch.split(cur_csv_t, seq_size)
+
+        counter += 1
+        seqs = seqs + cur_csv_t
+
+    # Create batches for training and testing
+    loader = DataLoader(seqs, batch_size=batch_size, shuffle=shuffle, drop_last=True)
+
+    return path_map, loader
 
 if __name__ == "__main__":
     #Demo for creating train, val and test sets for a game

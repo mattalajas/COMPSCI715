@@ -262,12 +262,12 @@ class actionGRUdeep(nn.Module):
 
 # Standard MLP for fina prediction
 class MLP(nn.Module):
-    def __init__(self, hid_size, dropout = 0):
+    def __init__(self, hid_size, out_size = 4, dropout = 0):
         super(MLP, self).__init__()
         # Check input size
         self.hidden1 = nn.Linear(hid_size, 256)
         self.hidden2 = nn.Linear(256, 64)
-        self.hidden3 = nn.Linear(64, 4)
+        self.hidden3 = nn.Linear(64, out_size)
 
         self.drop1 = nn.Dropout(p = dropout)
         self.drop2 = nn.Dropout(p = dropout)

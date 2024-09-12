@@ -91,7 +91,7 @@ def filter_dataframe(game_sessions, data_frame, device, seq_size = 150, batch_si
         seqs = seqs + cur_csv_t
 
     # Create batches for training and testing
-    loader = DataLoader(seqs, batch_size=batch_size, shuffle=shuffle)
+    loader = DataLoader(seqs, batch_size=batch_size, shuffle=shuffle, drop_last=True)
 
     return path_map, loader
 

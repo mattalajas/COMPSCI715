@@ -30,9 +30,9 @@ if torch.cuda.is_available():
     torch.cuda.empty_cache()
 
 # Main task hyperparams
-seq_size = 60
+seq_size = 50
 batch_size = 10
-start_pred = 40
+start_pred = 20
 epochs = 150
 iter_val = 10
 img_size = 64
@@ -49,8 +49,8 @@ loss_fac = 0.5
 aux_reguarisation = 0
 aux_lr = 0.01
 
-train_game_names = ['Barbie', 'Wild_Quest', 'Circle_Kawaii']
-test_game_names = ['Earth_Gym']
+train_game_names = ['Wild_Quest', 'Barbie', 'Circle_Kawaii']
+test_game_names = ['Barbie']
 val_game_names = ['Barbie']
 image_path = Template("/data/ysun209/VR.net/videos/${game_session}/video/${imgind}.jpg")
 
