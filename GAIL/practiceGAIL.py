@@ -38,7 +38,7 @@ discrim_hidden_size  = 128
 num_outputs = 4
 
 train_game_names = ['Wild_Quest', 'Circle_Kawaii', 'Barbie']
-test_game_names = ['Barbie']
+test_game_names = ['Kawaii_Daycare']
 val_game_names = ['Barbie']
 image_path = Template("/data/ysun209/VR.net/videos/${game_session}/video/${imgind}.jpg")
 
@@ -143,7 +143,6 @@ def train(loader, path_map, img_encoder, model, discriminator, d_criterion, opti
 
             next_image_t = read_images(n_path, n_indices, image_path, img_size, device)
             next_state = img_encoder(next_image_t)
-            # next_state, _, done, _ = envs.step(action.cpu().numpy())
             reward = expert_reward(state, h0_c, h0_a, c0_c, c0_a, action, device, discriminator)
             
             log_prob = dist.log_prob(action)
@@ -174,7 +173,6 @@ def train(loader, path_map, img_encoder, model, discriminator, d_criterion, opti
             #     if test_reward > threshold_reward: early_stop = True
         
         all_rewards.append(sum(rewards) / len(rewards))
-        # TODO: might need to add another action dist here
         _, next_value, _, _, _, _ = model(next_state, action, h0_c, h0_a, c0_c, c0_a)
         returns = compute_gae(next_value, rewards, values)
 
