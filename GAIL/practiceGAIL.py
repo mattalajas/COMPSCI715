@@ -1,11 +1,5 @@
-from ast import literal_eval
-
-import matplotlib.pyplot as plt
-import numpy as np
-import pandas as pd
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 import torch.utils.data
 import tqdm
 from copy import deepcopy
@@ -19,7 +13,7 @@ from COMPSCI715.CNNRNN.models import *
 
 device = torch.device('mps' if torch.backends.mps.is_available() else 'cuda' if torch.cuda.is_available() else 'cpu')
 # For data collection, change to True if want to evaluate output 
-verbose = False
+verbose = True
 
 if torch.cuda.is_available():
     torch.cuda.empty_cache()
@@ -29,13 +23,13 @@ ppo_epochs           = 4
 mini_batch_size      = 5 # TODO: Check this one out
 
 # Main task hyperparams
-seq_size = num_steps = 10 # 50
+seq_size = num_steps = 50
 batch_size = 10
 epochs = 150
 iter_val = 10
 img_size = 64
 lr = 3e-3
-dropout = 0.2
+dropout = 0.4
 rnn_emb = 256
 hid_size = 256
 rnn_type = 'gru'
@@ -43,15 +37,15 @@ discrim_hidden_size  = 128
 
 num_outputs = 4
 
-train_game_names = ['Barbie']
+train_game_names = ['Wild_Quest', 'Circle_Kawaii', 'Barbie']
 test_game_names = ['Barbie']
 val_game_names = ['Barbie']
 image_path = Template("/data/ysun209/VR.net/videos/${game_session}/video/${imgind}.jpg")
 
 # Create train test split
-train_sessions = DataUtils.read_txt("/data/mala711/COMPSCI715/datasets/barbie_demo_dataset/gailTrain.txt")
-val_sessions = DataUtils.read_txt("/data/mala711/COMPSCI715/datasets/barbie_demo_dataset/gailVal.txt")
-test_sessions = DataUtils.read_txt("/data/mala711/COMPSCI715/datasets/barbie_demo_dataset/gailTest.txt")
+train_sessions = DataUtils.read_txt("/data/mala711/COMPSCI715/datasets/barbie_demo_dataset/train.txt")
+val_sessions = DataUtils.read_txt("/data/mala711/COMPSCI715/datasets/barbie_demo_dataset/val.txt")
+test_sessions = DataUtils.read_txt("/data/mala711/COMPSCI715/datasets/barbie_demo_dataset/test.txt")
 
 train_set = MultiGameDataset(train_game_names, train_sessions)
 val_set = MultiGameDataset(val_game_names, val_sessions)
@@ -61,7 +55,7 @@ train_path_map, train_loader = filter_dataframe(train_sessions, train_set.df, de
 test_path_map, test_loader = filter_dataframe(test_sessions, test_set.df, device, seq_size, batch_size, iter=iter_val)
 
 # Run tensorboard summary writer
-if verbose: writer = SummaryWriter(f'/data/mala711/COMPSCI715/GAIL/runs/GAIL_train_{train_game_names}_test_{test_game_names}_init_test_seq_size_{seq_size}_iter_{iter_val}_dropout_{dropout}')
+if verbose: writer = SummaryWriter(f'/data/mala711/COMPSCI715/GAIL/runs/GAIL_{rnn_type.upper()}_train_{train_game_names}_test_{test_game_names}_ppoepochs_{ppo_epochs}_init_test_seq_size_{seq_size}_iter_{iter_val}_dropout_{dropout}')
 
 img_encoder   = models.LeNet(img_size, hid_size, dropout=dropout).to(device)
 model         = ActorCritic(num_outputs, hid_size, rnn_type, rnn_emb, hid_size, num_outputs, dropout=dropout).to(device)
@@ -202,7 +196,9 @@ def train(loader, path_map, img_encoder, model, discriminator, d_criterion, opti
 
         # Change expert traj to the actions of expert
         # expert_state_action = expert_traj[np.random.randint(0, expert_traj.shape[0], 2 * num_steps * num_envs), :]
-        expert_state_action = torch.cat([states, batch[1:, :, 2:]], 2).to(device)
+        expert_action = batch[:, 1:, 2:]
+        expert_action = expert_action.permute(1, 0, 2)
+        expert_state_action = torch.cat([states, expert_action], 2).to(device)
         state_action        = torch.cat([states, actions], 2).to(device)
 
         # Initialise hidden states
@@ -332,7 +328,9 @@ def test(loader, path_map, img_encoder, model, discriminator, d_criterion):
 
             # Change expert traj to the actions of expert
             # expert_state_action = expert_traj[np.random.randint(0, expert_traj.shape[0], 2 * num_steps * num_envs), :]
-            expert_state_action = torch.cat([states, batch[1:, :, 2:]], 2).to(device)
+            expert_action = batch[:, 1:, 2:]
+            expert_action = expert_action.permute(1, 0, 2)
+            expert_state_action = torch.cat([states, expert_action], 2).to(device)
             state_action        = torch.cat([states, actions], 2).to(device)
 
             # Initialise hidden states

@@ -1,17 +1,8 @@
 # Code retrieved from: https://github.com/higgsfield-ai/higgsfield
-from ast import literal_eval
-
-import cv2
-import matplotlib.pyplot as plt
-import numpy as np
-import pandas as pd
-import scipy
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.utils.data
-import tqdm
-from torch.utils.data import DataLoader, TensorDataset
 from torch.distributions import Normal
 from COMPSCI715.CNNRNN import models
 
