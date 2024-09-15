@@ -81,7 +81,7 @@ def stitch_images(im1, im2, left=True):
 
 if __name__ == "__main__":
     #code for testing the funcs above
-    session_folder = r"c:\Users\kelha\Documents\Uni\CS715\vr_dataset_sample\files\5_2_Earth_Gym"
+    session_folder = r"CS715\vr_dataset_sample\files\5_2_Earth_Gym"
     csv_file = open(os.path.join(session_folder, "data_file.csv"))
     im_folder = os.path.join(session_folder, "video")
     

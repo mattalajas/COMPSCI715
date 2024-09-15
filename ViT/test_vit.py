@@ -11,7 +11,7 @@ import utils.data_utils as d_u
 from train_vit import evaluate_model
 
 
-img_size = 256
+img_size = 512
 x_transform = torchvision.transforms.Compose([
     torchvision.transforms.Resize((img_size, img_size))
 ])
@@ -29,17 +29,17 @@ print(f"Using device {gpu_num}: {torch.cuda.get_device_properties(gpu_num).name}
 
 
 model = ViT(image_size = img_size,
-            patch_size = 32,
+            patch_size = 64,
             num_classes = len(val_set.cols_to_predict),
-            dim = 1024,
-            depth = 6,
-            heads = 16,
-            mlp_dim = 2048,
-            dropout = 0.1,
+            dim = 256,
+            depth = 4,
+            heads = 10,
+            mlp_dim = 512,
+            dropout = 0.2,
             emb_dropout = 0.1).to(device)
 
 
-model_path = "models/vit_v2/Epoch6.pt"
+model_path = "models/vit_v6/Epoch24.pt"
 
 model.load_state_dict(torch.load(model_path, weights_only=True))
 
