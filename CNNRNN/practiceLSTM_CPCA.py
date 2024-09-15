@@ -72,7 +72,7 @@ if verbose: writer = SummaryWriter(f'/data/mala711/COMPSCI715/CNNRNN/runs/LSTM_C
 # Initialise models
 init_conv = LeNet(img_size, hid_size, dropout=dropout).to(device)
 init_lstm = actionLSTM(rnn_emb, hid_size, hid_size, dropout).to(device)
-fin_mlp = MLP(hid_size, dropout).to(device)
+fin_mlp = MLP(hid_size, 4, dropout).to(device)
 cpca = CPCA(hid_size, aux_steps, sub_rate, loss_fac, dropout, device).to(device)
 
 # Initialise optimiser and loss function
@@ -142,6 +142,7 @@ def train(loader, path_map, optimizer, criterion):
 
             # Final prediction for each frame 
             fin = fin_mlp(h0)
+            h0 = h0.detach()
 
             # Will only start prediction after certain number of frames
             if seq >= start_pred:

@@ -55,9 +55,9 @@ val_game_names = ['Barbie']
 image_path = Template("/data/ysun209/VR.net/videos/${game_session}/video/${imgind}.jpg")
 
 # Create train test split
-train_sessions = DataUtils.read_txt("/data/mala711/COMPSCI715/datasets/barbie_demo_dataset/train.txt")
-val_sessions = DataUtils.read_txt("/data/mala711/COMPSCI715/datasets/barbie_demo_dataset/val.txt")
-test_sessions = DataUtils.read_txt("/data/mala711/COMPSCI715/datasets/barbie_demo_dataset/test.txt")
+train_sessions = DataUtils.read_txt("/data/mala711/COMPSCI715/datasets/barbie_demo_dataset/cnnrnnTrain.txt")
+val_sessions = DataUtils.read_txt("/data/mala711/COMPSCI715/datasets/barbie_demo_dataset/cnnrnnVal.txt")
+test_sessions = DataUtils.read_txt("/data/mala711/COMPSCI715/datasets/barbie_demo_dataset/cnnrnnTest.txt")
 
 train_set = MultiGameDataset(train_game_names, train_sessions)
 val_set = MultiGameDataset(val_game_names, val_sessions)
@@ -72,7 +72,7 @@ if verbose: writer = SummaryWriter(f'/data/mala711/COMPSCI715/CNNRNN/runs/GRU_CP
 # Initialise models
 init_conv = LeNet(img_size, hid_size, dropout=dropout).to(device)
 init_gru = actionGRU(rnn_emb, hid_size, hid_size, dropout).to(device)
-fin_mlp = MLP(hid_size, dropout).to(device)
+fin_mlp = MLP(hid_size, 4, dropout).to(device)
 cpca = CPCA(hid_size, aux_steps, sub_rate, loss_fac, dropout, device).to(device)
 
 # Initialise optimiser and loss function
@@ -139,6 +139,7 @@ def train(loader, path_map, optimizer, criterion):
 
             # Final prediction for each frame 
             fin = fin_mlp(h0)
+            h0 = h0.detach()
 
             # Will only start prediction after certain number of frames
             if seq >= start_pred:
