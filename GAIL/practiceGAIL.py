@@ -9,7 +9,8 @@ from torch.utils.tensorboard import SummaryWriter
 from COMPSCI715.GAIL.utils import *
 from COMPSCI715.GAIL.models import *
 from COMPSCI715.utils.data_utils import *
-from COMPSCI715.CNNRNN.models import *
+from COMPSCI715.CNNRNN.models import
+from COMPSCI715.CNNRNN.datasets import *
 
 device = torch.device('mps' if torch.backends.mps.is_available() else 'cuda' if torch.cuda.is_available() else 'cpu')
 # For data collection, change to True if want to evaluate output 
