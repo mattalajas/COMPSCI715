@@ -17,11 +17,12 @@ class DatasetTemplate(Dataset):
         transform: optional transformation applied to (torch 2 or 3D tensor) images
         target_transform: optional transformation to be applied to target 1D tensor
         """
-        #Default value for cols
-        if cols_to_predict is None: cols_to_predict = ["thumbstick_left_x", "thumbstick_left_y", "thumbstick_right_x", "thumbstick_right_y"]
+        # Default value for cols
+        if cols_to_predict is None: cols_to_predict = ["thumbstick_left_x", "thumbstick_left_y", "thumbstick_right_x",
+                                                       "thumbstick_right_y"]
         if cols_to_keep is None: cols_to_keep = []
 
-        #Helper function used to find location of stored images
+        # Helper function used to find location of stored images
         self.get_im_path = lambda session_name, frame: f"/data/ysun209/VR.net/videos/{session_name}/video/{frame}.jpg"
 
         self.frame_count = frame_count
@@ -48,10 +49,10 @@ class DatasetTemplate(Dataset):
         session = data_row["game_session"]
 
         if self.frame_count == 1:
-            #Read single image
+            # Read single image
             x = read_image(self.get_im_path(session, data_row["frame"]))
         else:
-            #read multiple images
+            # read multiple images
             x = []
             for i in range(0, self.frame_count):
                 x.append(read_image(self.get_im_path(session, int(data_row[f"frame_{i}"]))))
@@ -62,11 +63,11 @@ class DatasetTemplate(Dataset):
             control_vector = torch.from_numpy(control_vector.to_numpy().astype(float))
             x = (x, control_vector)
 
-        #read target
+        # read target
         y = data_row[self.cols_to_predict]
         y = torch.from_numpy(y.to_numpy().astype(float))
 
-        #apply transformations
+        # apply transformations
         if self.transform: x = self.transform(x)
         if self.target_transform: y = self.target_transform(y)
 
@@ -74,7 +75,8 @@ class DatasetTemplate(Dataset):
 
 
 class SingleSessionDataset(DatasetTemplate):
-     def __init__(self, session_name, frame_count = 1, cols_to_predict=None, cols_to_keep=None, transform=None, target_transform=None):
+    def __init__(self, session_name, frame_count=1, cols_to_predict=None, cols_to_keep=None, transform=None,
+                 target_transform=None):
         """
         Pytorch dataset for a single session of a game game
         game_name: name of the game to create the dataset around e.g. 'Barbie'
@@ -85,47 +87,16 @@ class SingleSessionDataset(DatasetTemplate):
         """
         super().__init__(frame_count, cols_to_predict, cols_to_keep, transform, target_transform)
 
-        #Create and format the dataframe
+        # Create and format the dataframe
         self.df = DataUtils.load_data_by_name(session_name.split("_")[2])
         self.df = DataUtils.format_dataset(self.df)
         self.df = self.df[self.df["game_session"] == session_name]
         self.df = DataUtils.ml_format(self.df, self.frame_count, self.cols_to_predict, self.cols_to_keep)
 
 
-class SingleGameDatasetRandomChoose(DatasetTemplate):
-    def __init__(self, game_name, session_set=None, frame_count = 1, cols_to_predict=None, cols_to_keep=None, transform=None, target_transform=None):
-        """
-        Pytorch dataset for a single game
-        game_name: name of the game to create the dataset around e.g. 'Barbie'
-        session_set: list of game session names to include
-        frame_count: number of frames to return with each item (1 will return the current frame, > 1 will return the current and previous frames)
-        cols_to_predict: list of column names (from formated dataset) that are treated as labels/prediction targets
-        transform: optional transformation applied to (torch 2 or 3D tensor) images
-        target_transform: optional transformation to be applied to target 1D tensor
-        """
-        super().__init__(frame_count, cols_to_predict, cols_to_keep, transform, target_transform)
-
-        #Create and format the dataframe
-        self.df = DataUtils.load_data_by_name(game_name)
-        self.df = DataUtils.format_dataset(self.df)
-
-        #if no session set provided, use all sessions
-        if session_set is None:
-            self.session_set = self.df["game_session"].unique()
-        else:
-            self.session_set = session_set
-        self.df = self.df[self.df["game_session"].isin(session_set)]
-
-        self.df = DataUtils.ml_format(self.df, self.frame_count, self.cols_to_predict, self.cols_to_keep)
-
-
-    # def __getitem__(self, _):
-    #     random_session = random.choice(self.session_set)
-    #
-
-
 class SingleGameDataset(DatasetTemplate):
-    def __init__(self, game_name, session_set=None, frame_count = 1, cols_to_predict=None, cols_to_keep=None, transform=None, target_transform=None):
+    def __init__(self, game_name, session_set=None, frame_count=1, cols_to_predict=None, cols_to_keep=None,
+                 transform=None, target_transform=None):
         """
         Pytorch dataset for a single game
         game_name: name of the game to create the dataset around e.g. 'Barbie'
@@ -137,11 +108,11 @@ class SingleGameDataset(DatasetTemplate):
         """
         super().__init__(frame_count, cols_to_predict, cols_to_keep, transform, target_transform)
 
-        #Create and format the dataframe
+        # Create and format the dataframe
         self.df = DataUtils.load_data_by_name(game_name)
         self.df = DataUtils.format_dataset(self.df)
 
-        #if no session set provided, use all sessions
+        # if no session set provided, use all sessions
         if session_set is None: session_set = self.df["game_session"].unique()
         self.df = self.df[self.df["game_session"].isin(session_set)]
 
@@ -149,7 +120,8 @@ class SingleGameDataset(DatasetTemplate):
 
 
 class MultiGameDataset(DatasetTemplate):
-    def __init__(self, game_names, session_set=None, frame_count = 1, cols_to_predict=None, cols_to_keep=None, transform=None, target_transform=None):
+    def __init__(self, game_names, session_set=None, frame_count=1, cols_to_predict=None, cols_to_keep=None,
+                 transform=None, target_transform=None):
         """
         Pytorch dataset for a single game
         game_names: list of game names to create the dataset around e.g. '[Barbie]'
@@ -162,7 +134,7 @@ class MultiGameDataset(DatasetTemplate):
         super().__init__(frame_count, cols_to_predict, cols_to_keep, transform, target_transform)
 
         dfs = []
-        #Create and format the dataframe
+        # Create and format the dataframe
         for game in game_names:
             single_df = DataUtils.load_data_by_name(game)
             single_df = DataUtils.format_dataset(single_df)
@@ -171,8 +143,24 @@ class MultiGameDataset(DatasetTemplate):
 
         self.df = pd.concat(dfs, ignore_index=True)
 
-        #if no session set provided, use all sessions
+        # if no session set provided, use all sessions
         if session_set is None: session_set = self.df["game_session"].unique()
         self.df = self.df[self.df["game_session"].isin(session_set)]
 
         self.df = DataUtils.ml_format(self.df, self.frame_count, self.cols_to_predict, self.cols_to_keep)
+
+
+if __name__ == "__main__":
+    # Demo for creating train, val and test sets for a game
+
+    train_sessions = DataUtils.read_txt("COMPSCI715/datasets/barbie_demo_dataset/train.txt")
+    val_sessions = DataUtils.read_txt("COMPSCI715/datasets/barbie_demo_dataset/val.txt")
+    test_sessions = DataUtils.read_txt("COMPSCI715/datasets/barbie_demo_dataset/test.txt")
+
+    barbie_train_set = SingleGameDataset("Barbie", train_sessions)
+    barbie_val_set = SingleGameDataset("Barbie", val_sessions)
+    barbie_test_set = SingleGameDataset("Barbie", test_sessions)
+
+    print(f"Items in train set: {len(barbie_train_set)}")
+    print(f"Items in val set: {len(barbie_val_set)}")
+    print(f"Items in test set: {len(barbie_val_set)}")

@@ -6,9 +6,6 @@ from torch.utils.data import DataLoader
 import torch
 import math
 
-from utils.datasets import SingleGameDataset
-
-
 class DataUtils:
     @staticmethod
     def load_data_by_name(gamename='', folder_path='/data/ysun209/VR.net/parquet/'):
@@ -201,18 +198,3 @@ def filter_dataframe(game_sessions, data_frame, device, seq_size = 150, batch_si
     loader = DataLoader(seqs, batch_size=batch_size, shuffle=shuffle, drop_last=True)
 
     return path_map, loader
-
-if __name__ == "__main__":
-    #Demo for creating train, val and test sets for a game
-    
-    train_sessions = DataUtils.read_txt("COMPSCI715/datasets/barbie_demo_dataset/train.txt")
-    val_sessions = DataUtils.read_txt("COMPSCI715/datasets/barbie_demo_dataset/val.txt")
-    test_sessions = DataUtils.read_txt("COMPSCI715/datasets/barbie_demo_dataset/test.txt")
-    
-    barbie_train_set = SingleGameDataset("Barbie", train_sessions)
-    barbie_val_set = SingleGameDataset("Barbie", val_sessions)
-    barbie_test_set = SingleGameDataset("Barbie", test_sessions)
-    
-    print(f"Items in train set: {len(barbie_train_set)}")
-    print(f"Items in val set: {len(barbie_val_set)}")
-    print(f"Items in test set: {len(barbie_val_set)}")
