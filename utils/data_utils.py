@@ -7,6 +7,9 @@ from torchvision.io import read_image
 import torch
 import math
 
+#disable pd warnings
+pd.options.mode.chained_assignment = None
+
 class DataUtils:
     @staticmethod
     def load_data_by_name(gamename=''):
@@ -113,7 +116,7 @@ class DataUtils:
         
         #Add column for each additional previous frame
         for i in range(1, frame_count):
-            df[f"frame_{i}"] = df.groupby("game_session")["frame"].shift(i)
+            df.loc[:, f"frame_{i}"] = df.groupby("game_session")["frame"].shift(i)
             
         #reorder cols and remove rows with not enough previous frames
         df = df[["game_session", "frame"] + [f"frame_{i}" for i in range(1, frame_count)] + cols_to_keep + cols_to_predict]      
@@ -267,13 +270,13 @@ if __name__ == "__main__":
     #Demo for creating train, val and test sets for a game
     
     train_sessions = DataUtils.read_txt("COMPSCI715/datasets/barbie_demo_dataset/train.txt")
-    val_sessions = DataUtils.read_txt("COMPSCI715/datasets/barbie_demo_dataset/val.txt")
-    test_sessions = DataUtils.read_txt("COMPSCI715/datasets/barbie_demo_dataset/test.txt")
+    #val_sessions = DataUtils.read_txt("COMPSCI715/datasets/barbie_demo_dataset/val.txt")
+    #test_sessions = DataUtils.read_txt("COMPSCI715/datasets/barbie_demo_dataset/test.txt")
     
-    barbie_train_set = SingleGameDataset("Barbie", train_sessions)
-    barbie_val_set = SingleGameDataset("Barbie", val_sessions)
-    barbie_test_set = SingleGameDataset("Barbie", test_sessions)
+    barbie_train_set = SingleGameDataset("Barbie", train_sessions, frame_count=9)
+    #barbie_val_set = SingleGameDataset("Barbie", val_sessions)
+    #barbie_test_set = SingleGameDataset("Barbie", test_sessions)
     
     print(f"Items in train set: {len(barbie_train_set)}")
-    print(f"Items in val set: {len(barbie_val_set)}")
-    print(f"Items in test set: {len(barbie_val_set)}")
+    #print(f"Items in val set: {len(barbie_val_set)}")
+    #print(f"Items in test set: {len(barbie_val_set)}")

@@ -13,12 +13,12 @@ from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
 from vit_pytorch.vit_pytorch.vit import ViT
+from vit_pytorch.vit_pytorch.vivit import ViT as VideoViT
 
 
 #add path to import data utils
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 import utils.data_utils as d_u
-
 
 
 def process_batch(batch_X, batch_Y, model, loss_func, opt):
@@ -33,14 +33,9 @@ def process_batch(batch_X, batch_Y, model, loss_func, opt):
   
 
 def train_model(model, train_dataset, val_dataset, epochs, batch_size, loss_func, opt, device, save_path, resume=None):
-    dataloader = torch.utils.data.dataloader.DataLoader(train_dataset, batch_size=batch_size, num_workers=4)
+    dataloader = torch.utils.data.dataloader.DataLoader(train_dataset, batch_size=batch_size, num_workers=8)
     
     tboard = SummaryWriter(save_path)
-    
-    for i in range(5):
-        random_im, label = random.choice(train_dataset)
-        random_im = (random_im - random_im.min()) / (random_im.max() - random_im.min())
-        tboard.add_image(f"Train set images/Image {i}", random_im)
     
     start_epoch = 0
     if resume:
@@ -78,7 +73,7 @@ def train_model(model, train_dataset, val_dataset, epochs, batch_size, loss_func
 
 def evaluate_model(model, dataset, batch_size, loss_func, device):
     model.eval()
-    dataloader = torch.utils.data.dataloader.DataLoader(dataset, batch_size=batch_size, num_workers=4)
+    dataloader = torch.utils.data.dataloader.DataLoader(dataset, batch_size=batch_size, num_workers=8)
     total_loss = 0
     with torch.no_grad():
         for X, Y in tqdm(dataloader, desc = "Evaluating model", bar_format = "{l_bar}{bar:20}{r_bar}"):
@@ -92,9 +87,13 @@ def evaluate_model(model, dataset, batch_size, loss_func, device):
 
 if __name__ == "__main__":
     img_size = 512
+    frames = 12
+    
+    reshape_for_vivit = lambda x: x.transpose(0, 1)
     
     x_train_transform = v2.Compose([
         v2.Resize((img_size, img_size)),
+        reshape_for_vivit
         #v2.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2),
         #v2.RandomAffine(degrees = 5, translate=(0.1, 0.1)),
         #v2.GaussianNoise()
@@ -102,15 +101,16 @@ if __name__ == "__main__":
     
     
     x_test_transform = v2.Compose([
-        v2.Resize((img_size, img_size))
+        v2.Resize((img_size, img_size)),
+        reshape_for_vivit
     ])
     
     #setup train and validation sets
     train_sessions = d_u.DataUtils.read_txt("COMPSCI715/datasets/barbie_demo_dataset/train.txt")
-    train_set = d_u.SingleGameDataset("Barbie", train_sessions, transform=x_train_transform)
+    train_set = d_u.SingleGameDataset("Barbie", train_sessions, transform=x_train_transform, frame_count=frames)
     
     val_sessions = d_u.DataUtils.read_txt("COMPSCI715/datasets/barbie_demo_dataset/val.txt")
-    val_set = d_u.SingleGameDataset("Barbie", val_sessions, transform=x_test_transform)
+    val_set = d_u.SingleGameDataset("Barbie", val_sessions, transform=x_test_transform, frame_count=frames)
 
     #select device
     gpu_num = 5
@@ -118,23 +118,27 @@ if __name__ == "__main__":
     print(f"Using device {gpu_num}: {torch.cuda.get_device_properties(gpu_num).name}")
     
     #create ViT model
-    model = ViT(image_size = img_size,
-                patch_size = 64,
-                num_classes = len(train_set.cols_to_predict),
-                dim = 256,
-                depth = 4,
-                heads = 10,
-                mlp_dim = 512,
-                dropout = 0.2,
-                emb_dropout = 0.1).to(device)
+    model = VideoViT(image_size = img_size,
+                    image_patch_size = 64,
+                    frame_patch_size = 2,
+                    num_classes = len(train_set.cols_to_predict),
+                    dim = 256,
+                    spatial_depth = 4,
+                    temporal_depth = 4,
+                    heads = 10,
+                    mlp_dim = 512,
+                    dropout = 0.3,
+                    emb_dropout = 0.1,
+                    frames = frames,
+                    variant = "factorized_encoder").to(device)
     
 
     lr = 1e-4
-    weight_decay = 1e-6
+    weight_decay = 1e-5
     loss_func = torch.nn.MSELoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
     
-    save_dir = "models/vit_v6"
+    save_dir = "models/vivit_v1"
     
     #train the model
     train_model(model = model,
