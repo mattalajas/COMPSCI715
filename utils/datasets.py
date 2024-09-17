@@ -196,33 +196,35 @@ class SingleGameControlDataset(Dataset):
         if session_set is None: session_set = self.df["game_session"].unique()
         self.df = self.df[self.df["game_session"].isin(session_set)]
 
-        self.df = DataUtils.ml_format(self.df, self.frame_count, [], self.cols_to_keep)
+        self.df = DataUtils.ml_format(self.df, frame_count=1, cols_to_predict=[], cols_to_keep=self.cols_to_keep)
 
-    def __getitem__(self, index):
+    def __getitem__(self, index: int):
         """
-        Returns a single (control, _) dataset item with the given index
+        Returns a single (control, _) dataset item with the given index,
 
         There is no label to return, so the second item is a dummy tensor
 
         @param index: index of the item to return
         @return: (control, _)
         """
-        data_row = self.df.iloc[index]
+        data_frame_slice = self.df.iloc[index : index + self.frame_count]
 
-        x = data_row[self.cols_to_keep]
-        x = torch.from_numpy(x.to_numpy().astype(float))
+        x = data_frame_slice[self.cols_to_keep]
+        x = torch.from_numpy(x.to_numpy().astype(np.float32))
 
         # apply transformations
         if self.transform: x = self.transform(x)
 
-        return x, torch.tensor([0])
+        assert x.shape[0] == self.frame_count, f"Expected x to have shape ({self.frame_count}, num_features), got {x.shape}"
+
+        return x, torch.tensor([0])  # x has shape (seq_len, num_features), y is a dummy tensor
 
     @property
     def num_features(self):
         return len(self.cols_to_keep)
 
     def __len__(self):
-        return len(self.df)
+        return len(self.df) - self.frame_count + 1
 
 
 if __name__ == "__main__":
