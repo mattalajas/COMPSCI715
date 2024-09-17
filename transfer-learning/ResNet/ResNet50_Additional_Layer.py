@@ -12,9 +12,6 @@ from torch.utils.tensorboard import SummaryWriter
 # from torch.optim import Adam
 from torch.optim import AdamW
 from torch.optim.lr_scheduler import ReduceLROnPlateau
-
-import numpy as np
-
 from datetime import datetime
 
 img_size = 224
@@ -92,12 +89,14 @@ criterion = nn.MSELoss()  # Use MSE for regression
 # optimizer = Adam(model.parameters(), lr=1e-4)
 optimizer = AdamW(model.parameters(), lr=1e-4)
 
+# Define the L1 regularization strength (hyperparameter)
+l1_lambda = 1e-5  # You can adjust this value
 
 # Define a learning rate scheduler
 scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=2)
 
 # Initialize TensorBoard writer
-writer = SummaryWriter(log_dir="./runs/TL_ResNet50_Additional_Layer")
+writer = SummaryWriter(log_dir="./runs/TL_ResNet50_Additional_Layer-L1-regularzation")
 
 # Training loop
 num_epochs = 100
@@ -116,6 +115,10 @@ for epoch in range(num_epochs):
         # Forward pass
         outputs = model(images)
         loss = criterion(outputs, targets)
+
+        # L1 regularization
+        l1_norm = sum(p.abs().sum() for p in model.parameters())
+        loss += l1_lambda * l1_norm
 
         # Backward pass and optimize
         loss.backward()
