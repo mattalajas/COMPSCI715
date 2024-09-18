@@ -83,20 +83,21 @@ model = VideoFrameModel()
 # Move model to the device (GPU)
 model = model.to(device)
 
+# Define regularization strengths
+l1_lambda = 1e-5  # L1 regularization strength
+l2_lambda = 1e-4  # L2 regularization strength (also known as weight decay)
 
 # Define loss function and optimizer
 criterion = nn.MSELoss()  # Use MSE for regression
 # optimizer = Adam(model.parameters(), lr=1e-4)
-optimizer = AdamW(model.parameters(), lr=1e-4)
-
-# Define the L1 regularization strength (hyperparameter)
-l1_lambda = 1e-5  # You can adjust this value
+# optimizer = AdamW(model.parameters(), lr=1e-4)
+optimizer = AdamW(model.parameters(), lr=1e-4, weight_decay=l2_lambda)
 
 # Define a learning rate scheduler
 scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=2)
 
 # Initialize TensorBoard writer
-writer = SummaryWriter(log_dir="./runs/TL_ResNet50_Additional_Layer-L1-regularzation")
+writer = SummaryWriter(log_dir="./runs/TL_ResNet50_Additional_Layer-L1-L2-regularzation")
 
 # Training loop
 num_epochs = 100
