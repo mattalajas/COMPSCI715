@@ -9,7 +9,7 @@ import math
 
 class DataUtils:
     @staticmethod
-    def load_data_by_name(gamename='', folder_path='/data/ysun209/VR.net/parquet/'):
+    def load_data_by_name(gamename='', parquet_folder_path='/data/ysun209/VR.net/parquet/'):
         """
         gamename: str, the name of one game to load data for, if empty, load all data.
         return: pd.DataFrame, the data loaded from the parquet files.
@@ -30,8 +30,8 @@ class DataUtils:
                 or 'Walking_Dead' or 'Water_Battling' or 'Western_Skies_RPG' or 'Wild_Quest' or 'Wizard_Sandbox' or
                 'Wood_Warehouse' or 'Zombie' or 'Zoo_Chef_Challenge'
         """
-        file_names = [f for f in os.listdir(folder_path) if os.path.isfile(os.path.join(folder_path, f))]
-        file_paths = [os.path.join(folder_path, f) for f in file_names]
+        file_names = [f for f in os.listdir(parquet_folder_path) if os.path.isfile(os.path.join(parquet_folder_path, f))]
+        file_paths = [os.path.join(parquet_folder_path, f) for f in file_names]
         df_list = []
         for file_path in file_paths:
             if gamename in file_path:
