@@ -1,7 +1,10 @@
 import os
+import os
 import sys
 sys.path.insert(0, '/data/ysun209/app/0_python/COMPSCI715')
 import utils.data_utils as data_utils
+
+
 import torch
 import torch.nn as nn
 import timm
@@ -84,7 +87,7 @@ model = VideoFrameModel()
 model = model.to(device)
 
 # Define regularization strengths
-l1_lambda = 1e-5  # L1 regularization strength
+# l1_lambda = 1e-5  # L1 regularization strength
 l2_lambda = 1e-4  # L2 regularization strength (also known as weight decay)
 
 # Define loss function and optimizer
@@ -97,14 +100,20 @@ optimizer = AdamW(model.parameters(), lr=1e-4, weight_decay=l2_lambda)
 scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=2)
 
 # Initialize TensorBoard writer
-writer = SummaryWriter(log_dir="./runs/TL_ResNet50_Additional_Layer-L1-L2-regularzation")
+writer = SummaryWriter(log_dir="./runs/TL_ResNet50_Additional_Layer-L2-regularzation")
 
 # Training loop
 num_epochs = 100
 
 # Training loop with validation
 for epoch in range(num_epochs):
-    model.train()
+    
+    # model.train()
+    if epoch == 0:
+        model.eval()  # Model is in eval mode for the first epoch
+    else:
+        model.train()  # Resume training mode after first epoch
+
     running_loss = 0.0
 
     for images, targets in train_loader:
@@ -118,8 +127,8 @@ for epoch in range(num_epochs):
         loss = criterion(outputs, targets)
 
         # L1 regularization
-        l1_norm = sum(p.abs().sum() for p in model.parameters())
-        loss += l1_lambda * l1_norm
+        # l1_norm = sum(p.abs().sum() for p in model.parameters())
+        # loss += l1_lambda * l1_norm
 
         # Backward pass and optimize
         loss.backward()
@@ -153,5 +162,3 @@ for epoch in range(num_epochs):
     current_lr = optimizer.param_groups[0]['lr']
     print(f"Current Learning Rate: {current_lr:.6f}")
     writer.add_scalar('Learning Rate', current_lr, epoch)
-
-    
