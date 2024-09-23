@@ -207,7 +207,7 @@ class SingleGameControlDataset(Dataset):
         @param index: index of the item to return
         @return: (control, _)
         """
-        data_frame_slice = self.df.iloc[index : index + self.frame_count]
+        data_frame_slice = self.df.iloc[index: index + self.frame_count]
 
         x = data_frame_slice[self.cols_to_keep]
         x = torch.from_numpy(x.to_numpy().astype(np.float32))
@@ -215,7 +215,8 @@ class SingleGameControlDataset(Dataset):
         # apply transformations
         if self.transform: x = self.transform(x)
 
-        assert x.shape[0] == self.frame_count, f"Expected x to have shape ({self.frame_count}, num_features), got {x.shape}"
+        assert x.shape[
+                   0] == self.frame_count, f"Expected x to have shape ({self.frame_count}, num_features), got {x.shape}"
 
         return x, torch.tensor([0])  # x has shape (seq_len, num_features), y is a dummy tensor
 
