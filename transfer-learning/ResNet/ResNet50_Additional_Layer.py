@@ -12,6 +12,7 @@ from torch.utils.data import DataLoader
 import torchvision
 from torchvision import transforms, datasets
 from torch.utils.tensorboard import SummaryWriter
+from tqdm import tqdm
 # from torch.optim import Adam
 from torch.optim import AdamW
 from torch.optim.lr_scheduler import ReduceLROnPlateau
@@ -24,11 +25,13 @@ transform = torchvision.transforms.Compose([
 ])
 
 # Setup train and validation sets
+cols_to_predict_value = ["thumbstick_left_x", "thumbstick_left_y", "thumbstick_right_x", "thumbstick_right_y", "head_dir_a", "head_dir_b", "head_dir_c", "head_dir_d", "head_pos_x", "head_pos_y", "head_pos_z"]
+
 train_sessions = data_utils.DataUtils.read_txt("/data/ysun209/app/0_git/COMPSCI715/datasets/barbie_demo_dataset/train.txt")
-train_set = data_utils.SingleGameDataset("Barbie", train_sessions, transform=transform)
+train_set = data_utils.SingleGameDataset("Barbie", train_sessions, transform=transform, cols_to_predict=cols_to_predict_value)
 
 val_sessions = data_utils.DataUtils.read_txt("/data/ysun209/app/0_git/COMPSCI715/datasets/barbie_demo_dataset/val.txt")
-val_set = data_utils.SingleGameDataset("Barbie", val_sessions, transform=transform)
+val_set = data_utils.SingleGameDataset("Barbie", val_sessions, transform=transform, cols_to_predict=cols_to_predict_value)
 
 
 train_loader = DataLoader(train_set, batch_size=128, shuffle=True, num_workers=4, pin_memory=True)
@@ -65,7 +68,7 @@ controller_layers = nn.Sequential(
     nn.ReLU(),
     nn.BatchNorm1d(64),
     nn.Dropout(0.5),  # Dropout layer for regularization
-    nn.Linear(64, 4)  # Adjust output dimensions
+    nn.Linear(64, 11)  # Adjust output dimensions
 )
 
 
@@ -116,7 +119,7 @@ for epoch in range(num_epochs):
 
     running_loss = 0.0
 
-    for images, targets in train_loader:
+    for images, targets in tqdm(train_loader, desc="Training", leave=False):
         images, targets = images.to(device), targets.to(device)
 
         # Zero the parameter gradients
@@ -144,7 +147,7 @@ for epoch in range(num_epochs):
     model.eval()
     val_loss = 0.0
     with torch.no_grad():
-        for images, targets in val_loader:
+        for images, targets in tqdm(val_loader, desc="Validation", leave=False):
             images, targets = images.to(device), targets.to(device)
             outputs = model(images)
             loss = criterion(outputs, targets)
@@ -162,3 +165,7 @@ for epoch in range(num_epochs):
     current_lr = optimizer.param_groups[0]['lr']
     print(f"Current Learning Rate: {current_lr:.6f}")
     writer.add_scalar('Learning Rate', current_lr, epoch)
+    
+# Save model after training
+current_file_name = os.path.splitext(os.path.basename(__file__))[0]
+torch.save(model.state_dict(), f"models/{current_file_name}.pth")

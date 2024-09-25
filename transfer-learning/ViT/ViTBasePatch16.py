@@ -99,3 +99,6 @@ for epoch in range(num_epochs):
 
     print(f"Epoch [{epoch+1}/{num_epochs}], Validation Loss: {avg_val_loss}")
     writer.add_scalar('Validation Loss', avg_val_loss, epoch)
+
+# Save model after training
+torch.save(model.state_dict(), f"models/{current_file_name}.pth")
