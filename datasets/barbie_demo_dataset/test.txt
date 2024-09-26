@@ -1,5 +1,6 @@
-129_2_Kawaii_Daycare
-130_2_Kawaii_Daycare
-132_2_Kawaii_Daycare
-133_2_Kawaii_Daycare
-134_2_Kawaii_Daycare
+Kawaii_House,383_1_Kawaii_House
+Kawaii_House,384_1_Kawaii_House
+Kawaii_House,385_1_Kawaii_House
+Kawaii_Daycare,125_2_Kawaii_Daycare
+Kawaii_Daycare,126_2_Kawaii_Daycare
+Kawaii_Daycare,127_2_Kawaii_Daycare
