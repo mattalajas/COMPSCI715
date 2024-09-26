@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.utils.data
 import tqdm
 from copy import deepcopy
+from functools import partial
 from string import Template
 from torch.utils.tensorboard import SummaryWriter
 
@@ -10,9 +11,9 @@ from COMPSCI715.GAIL.utils import *
 from COMPSCI715.GAIL.models import *
 from COMPSCI715.utils.data_utils import *
 from COMPSCI715.CNNRNN.models import *
-from COMPSCI715.utils.datasets import *
 
-device = torch.device('mps' if torch.backends.mps.is_available() else 'cuda' if torch.cuda.is_available() else 'cpu')
+cuda_num = 2
+device = torch.device('mps' if torch.backends.mps.is_available() else f'cuda:{cuda_num}' if torch.cuda.is_available() else 'cpu')
 # For data collection, change to True if want to evaluate output 
 verbose = True
 
@@ -20,27 +21,28 @@ if torch.cuda.is_available():
     torch.cuda.empty_cache()
 
 #Hyper params:
-ppo_epochs           = 4
-mini_batch_size      = 5 # TODO: Check this one out
+ppo_epochs           = 10
+mini_batch_size      = 10 # TODO: Check this one out
 
 # Main task hyperparams
 seq_size = num_steps = 50
 batch_size = 10
-epochs = 200
+epochs = 500
 iter_val = 10
 img_size = 64
-lr = 3e-3
+lr = 3e-2
 disc_lr = 3e-3
 dropout = 0.4
 rnn_emb = 256
 hid_size = 256
 rnn_type = 'gru'
 discrim_hidden_size  = 128
+weight_decay = 5e-3
 
 num_outputs = 4
 
 train_game_names = ['Wild_Quest', 'Circle_Kawaii', 'Barbie']
-test_game_names = ['Kawaii_Daycare']
+test_game_names = ['Barbie']
 val_game_names = ['Barbie']
 image_path = Template("/data/ysun209/VR.net/videos/${game_session}/video/${imgind}.jpg")
 
@@ -57,25 +59,29 @@ train_path_map, train_loader = filter_dataframe(train_sessions, train_set.df, de
 test_path_map, test_loader = filter_dataframe(test_sessions, test_set.df, device, seq_size, batch_size, iter=iter_val)
 
 # Run tensorboard summary writer
-if verbose: writer = SummaryWriter(f'/data/mala711/COMPSCI715/GAIL/runs/GAILv_{rnn_type.upper()}_train_{train_game_names}_test_{test_game_names}_ppoepochs_{ppo_epochs}_mini_batch_{mini_batch_size}_lr_{lr}_dlr_{disc_lr}_init_test_seq_size_{seq_size}_iter_{iter_val}_dropout_{dropout}')
+if verbose: writer = SummaryWriter(f'/data/mala711/COMPSCI715/GAIL/runs/GAILv2_{rnn_type.upper()}_train_{train_game_names}_test_{test_game_names}_ppoepochs_{ppo_epochs}_mini_batch_{mini_batch_size}_lr_{lr}_dlr_{disc_lr}_init_test_seq_size_{seq_size}_iter_{iter_val}_dropout_{dropout}_weightd_{weight_decay}')
 
-img_encoder   = models.LeNet(img_size, hid_size, dropout=dropout).to(device)
-model         = ActorCritic(num_outputs, hid_size, rnn_type, rnn_emb, hid_size, num_outputs, dropout=dropout).to(device)
+model_img_encoder = models.LeNet(img_size, hid_size, dropout=dropout).to(device)
+disc_img_encoder = models.LeNet(img_size, hid_size, dropout=dropout).to(device)
+model = ActorCritic(num_outputs, hid_size, rnn_type, rnn_emb, hid_size, num_outputs, dropout=dropout).to(device)
 discriminator = Discriminator(hid_size + num_outputs, hid_size, rnn_type, dropout).to(device)
+
+read_img = partial(read_images, image_path = image_path, img_size = img_size, device = device)
 
 d_criterion = nn.BCELoss()
 
-optimizer_img_encoder = torch.optim.Adam(img_encoder.parameters(), lr=lr)
-optimizer  = torch.optim.Adam(model.parameters(), lr=lr)
-optimizer_discrim = torch.optim.Adam(discriminator.parameters(), lr=disc_lr)
+optimizer  = torch.optim.Adam([{'params': model_img_encoder.parameters()},
+                               {'params': model.parameters()}], lr=lr, weight_decay=weight_decay)
+optimizer_discrim = torch.optim.Adam([{'params': discriminator.parameters()},
+                                    {'params': disc_img_encoder.parameters()}], lr=disc_lr, weight_decay=weight_decay)
 
 test_rewards = []
 
-optimizer_img_encoder.zero_grad()
-
-def train(loader, path_map, img_encoder, model, discriminator, d_criterion, optimizer_img_encoder, \
+def train(loader, path_map, model_img_encoder, disc_img_encoder,\
+          model, discriminator, d_criterion, \
           optimizer, optimizer_discrim):
-    img_encoder.train()
+    model_img_encoder.train()
+    disc_img_encoder.train()
     model.train()
     discriminator.train()
 
@@ -92,6 +98,7 @@ def train(loader, path_map, img_encoder, model, discriminator, d_criterion, opti
         log_probs = []
         values    = []
         states    = []
+        d_states  = []
         actions   = []
         rewards   = []
         h0_as     = []
@@ -100,8 +107,6 @@ def train(loader, path_map, img_encoder, model, discriminator, d_criterion, opti
         c0_cs     = []
         entropy = 0
 
-        optimizer_img_encoder.zero_grad()
-        
         # Initialise RNN hidden states
         h0_a = torch.empty((batch.shape[0], hid_size)).to(device)
         h0_a = torch.nn.init.xavier_uniform_(h0_a)
@@ -117,15 +122,13 @@ def train(loader, path_map, img_encoder, model, discriminator, d_criterion, opti
 
         path = batch[:, 0, 0]
         path = [path_map[int(i)] for i in path]
-        image_t = read_images(path, batch[:, 0, 1], image_path, img_size, device)
-
-        # TODO: Change this to image encoder maybe
-        state = img_encoder(image_t)
+        images = read_images(path, batch[:, 0, 1], image_path, img_size, device)
 
         action = torch.Tensor(batch[:, 0, 2:]).to(device)
 
         for seq in range(1, num_steps):
             # Get actor critic values
+            state = model_img_encoder(images)
             dist, value, h0_c_new, h0_a_new, c0_c_new, c0_a_new = model(state, action, h0_c, h0_a, c0_c, c0_a)
 
             action = dist.sample()
@@ -134,10 +137,10 @@ def train(loader, path_map, img_encoder, model, discriminator, d_criterion, opti
             n_indices = batch[:, seq, 1]
             n_path = batch[:, seq, 0]
             n_path = [path_map[int(i)] for i in n_path]
+            next_images = read_images(n_path, n_indices, image_path, img_size, device)
 
-            next_image_t = read_images(n_path, n_indices, image_path, img_size, device)
-            next_state = img_encoder(next_image_t)
-            reward = expert_reward(state, h0_c, h0_a, c0_c, c0_a, action, device, discriminator)
+            disc_state = disc_img_encoder(images) 
+            reward = expert_reward(disc_state, h0_c, h0_a, c0_c, c0_a, action, device, discriminator)
             
             log_prob = dist.log_prob(action)
             entropy += dist.entropy().mean()
@@ -147,13 +150,15 @@ def train(loader, path_map, img_encoder, model, discriminator, d_criterion, opti
             rewards.append(reward)
             
             states.append(state.detach())
+            d_states.append(disc_state)
+
             actions.append(action)
             h0_as.append(deepcopy(h0_a.detach()))
             h0_cs.append(deepcopy(h0_c.detach()))
             c0_as.append(deepcopy(c0_a.detach()))
             c0_cs.append(deepcopy(c0_c.detach()))
             
-            state = next_state
+            images = next_images
             h0_c = h0_c_new
             h0_a = h0_a_new
             c0_c = c0_c_new
@@ -167,7 +172,8 @@ def train(loader, path_map, img_encoder, model, discriminator, d_criterion, opti
             #     if test_reward > threshold_reward: early_stop = True
         
         all_rewards.append(sum(rewards) / len(rewards))
-        _, next_value, _, _, _, _ = model(next_state, action, h0_c, h0_a, c0_c, c0_a)
+        state = model_img_encoder(images)
+        _, next_value, _, _, _, _ = model(state, action, h0_c, h0_a, c0_c, c0_a)
         returns = compute_gae(next_value, rewards, values)
 
         returns   = torch.stack(returns).detach()
@@ -175,6 +181,7 @@ def train(loader, path_map, img_encoder, model, discriminator, d_criterion, opti
         values    = torch.stack(values).detach()
         states    = torch.stack(states)
         actions   = torch.stack(actions)
+        d_states  = torch.stack(d_states)
         h0_as     = torch.stack(h0_as)
         h0_cs     = torch.stack(h0_cs)
         c0_as     = torch.stack(c0_as)
@@ -190,7 +197,7 @@ def train(loader, path_map, img_encoder, model, discriminator, d_criterion, opti
         # expert_state_action = expert_traj[np.random.randint(0, expert_traj.shape[0], 2 * num_steps * num_envs), :]
         expert_action = batch[:, 1:, 2:]
         expert_action = expert_action.permute(1, 0, 2)
-        expert_state_action = torch.cat([states, expert_action], 2).to(device)
+        expert_state_action = torch.cat([d_states, expert_action], 2).to(device)
         state_action        = torch.cat([states, actions], 2).to(device)
 
         # Initialise hidden states
@@ -205,7 +212,7 @@ def train(loader, path_map, img_encoder, model, discriminator, d_criterion, opti
 
         fake = discriminator(state_action, d_h0_c, d_h0_a, d_c0_c, d_c0_a)
         real = discriminator(expert_state_action, d_h0_c, d_h0_a, d_c0_c, d_c0_a)
-        
+
         optimizer_discrim.zero_grad()
         discrim_loss = d_criterion(fake, torch.ones(fake.shape).to(device)) + \
                 d_criterion(real, torch.zeros(real.shape).to(device))
@@ -227,8 +234,9 @@ def train(loader, path_map, img_encoder, model, discriminator, d_criterion, opti
 
     return mean_ppo_loss, mean_discrim_loss, mean_rewards
 
-def test(loader, path_map, img_encoder, model, discriminator, d_criterion):
-    img_encoder.eval()
+def test(loader, path_map, model_img_encoder, disc_img_encoder, model, discriminator, d_criterion):
+    model_img_encoder.eval()
+    disc_img_encoder.eval()
     model.eval()
     discriminator.eval()
 
@@ -245,6 +253,7 @@ def test(loader, path_map, img_encoder, model, discriminator, d_criterion):
             log_probs = []
             values    = []
             states    = []
+            d_states  = []
             actions   = []
             rewards   = []
             entropy = 0
@@ -264,13 +273,13 @@ def test(loader, path_map, img_encoder, model, discriminator, d_criterion):
 
             path = batch[:, 0, 0]
             path = [path_map[int(i)] for i in path]
-            image_t = read_images(path, batch[:, 0, 1], image_path, img_size, device)
-            state = img_encoder(image_t)
+            images = read_images(path, batch[:, 0, 1], image_path, img_size, device)
 
             action = torch.Tensor(batch[:, 0, 2:]).to(device)
 
             for seq in range(1, num_steps):
                 # Get actor critic values
+                state = model_img_encoder(images)
                 dist, value, h0_c_new, h0_a_new, c0_c_new, c0_a_new = model(state, action, h0_c, h0_a, c0_c, c0_a)
 
                 action = dist.sample()
@@ -279,11 +288,11 @@ def test(loader, path_map, img_encoder, model, discriminator, d_criterion):
                 n_indices = batch[:, seq, 1]
                 n_path = batch[:, seq, 0]
                 n_path = [path_map[int(i)] for i in n_path]
-
-                next_image_t = read_images(n_path, n_indices, image_path, img_size, device)
-                next_state = img_encoder(next_image_t)
+                next_images = read_images(n_path, n_indices, image_path, img_size, device)
+                
                 # next_state, _, done, _ = envs.step(action.cpu().numpy())
-                reward = expert_reward(state, h0_c, h0_a, c0_c, c0_a, action, device, discriminator)
+                disc_state = disc_img_encoder(images)
+                reward = expert_reward(disc_state, h0_c, h0_a, c0_c, c0_a, action, device, discriminator)
                 
                 log_prob = dist.log_prob(action)
                 entropy += dist.entropy().mean()
@@ -293,9 +302,10 @@ def test(loader, path_map, img_encoder, model, discriminator, d_criterion):
                 rewards.append(reward)
                 
                 states.append(state)
+                d_states.append(disc_state)
                 actions.append(action)
                 
-                state = next_state
+                images = next_images
                 h0_c = h0_c_new
                 h0_a = h0_a_new
                 c0_c = c0_c_new
@@ -309,20 +319,22 @@ def test(loader, path_map, img_encoder, model, discriminator, d_criterion):
                 #     if test_reward > threshold_reward: early_stop = True
             
             all_rewards.append(sum(rewards) / len(rewards))
-            _, next_value, _, _, _, _ = model(next_state, action, h0_c, h0_a, c0_c, c0_a)
+            state = model_img_encoder(images)
+            _, next_value, _, _, _, _ = model(state, action, h0_c, h0_a, c0_c, c0_a)
             returns = compute_gae(next_value, rewards, values)
 
-            returns   = torch.stack(returns).detach()
-            log_probs = torch.stack(log_probs).detach()
-            values    = torch.stack(values).detach()
-            states    = torch.stack(states).detach()
+            returns   = torch.stack(returns)
+            log_probs = torch.stack(log_probs)
+            values    = torch.stack(values)
+            states    = torch.stack(states)
+            d_states  = torch.stack(d_states)
             actions   = torch.stack(actions)
 
             # Change expert traj to the actions of expert
             # expert_state_action = expert_traj[np.random.randint(0, expert_traj.shape[0], 2 * num_steps * num_envs), :]
             expert_action = batch[:, 1:, 2:]
             expert_action = expert_action.permute(1, 0, 2)
-            expert_state_action = torch.cat([states, expert_action], 2).to(device)
+            expert_state_action = torch.cat([d_states, expert_action], 2).to(device)
             state_action        = torch.cat([states, actions], 2).to(device)
 
             # Initialise hidden states
@@ -354,10 +366,11 @@ def test(loader, path_map, img_encoder, model, discriminator, d_criterion):
     return mean_discrim_loss, mean_rewards
 
 for epoch in range(1, epochs+1):
-    train_ppo_loss, train_discrim_loss, train_rewards = train(train_loader, train_path_map, img_encoder, \
-                                      model, discriminator, d_criterion, optimizer_img_encoder, \
-                                      optimizer, optimizer_discrim)
-    test_discrim_loss, test_rewards = test(test_loader, test_path_map, img_encoder, model, discriminator, d_criterion)
+    train_ppo_loss, train_discrim_loss, train_rewards = train(train_loader, train_path_map, \
+                                                              model_img_encoder, disc_img_encoder, model, \
+                                                              discriminator, d_criterion, optimizer, optimizer_discrim)
+    test_discrim_loss, test_rewards = test(test_loader, test_path_map, model_img_encoder, \
+                                           disc_img_encoder, model, discriminator, d_criterion)
 
     # Only add this if val data is available
     # val_rmse, val_ap, val_auc = test(val_loader)
