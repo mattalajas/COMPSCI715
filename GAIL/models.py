@@ -12,7 +12,7 @@ def init_weights(m):
         nn.init.constant_(m.bias, 0.1)
 
 class Actor(nn.Module):
-    def __init__(self, conv_out, rnn_type, rnn_emb, act_dim, final_out, dropout = 0):
+    def __init__(self, in_dim, conv_out, rnn_type, rnn_emb, act_dim, final_out, dropout = 0):
         super(Actor, self).__init__()
         
         # self.conv = models.LeNet(img_size, conv_out, padding, kernel, stride, dropout)
@@ -20,9 +20,9 @@ class Actor(nn.Module):
         
         self.rnn_type = rnn_type
         if self.rnn_type.lower() == 'gru':
-            self.rnn = models.actionGRU(rnn_emb, act_dim, conv_out, dropout)
+            self.rnn = models.actionGRU(in_dim, rnn_emb, act_dim, conv_out, dropout)
         else:
-            self.rnn = models.actionLSTM(rnn_emb, act_dim, conv_out, dropout)
+            self.rnn = models.actionLSTM(in_dim, rnn_emb, act_dim, conv_out, dropout)
         
         self.mlp = models.MLP(conv_out, final_out, dropout)
         
@@ -42,7 +42,7 @@ class Actor(nn.Module):
         return fin, h0, c0
     
 class Critic(nn.Module):
-    def __init__(self, conv_out, rnn_type, rnn_emb, act_dim, dropout = 0):
+    def __init__(self, in_dim, conv_out, rnn_type, rnn_emb, act_dim, dropout = 0):
         super(Critic, self).__init__()
         
         # self.conv = models.LeNet(img_size, conv_out, padding, kernel, stride, dropout)
@@ -50,9 +50,9 @@ class Critic(nn.Module):
         
         self.rnn_type = rnn_type
         if self.rnn_type.lower() == 'gru':
-            self.rnn = models.actionGRU(rnn_emb, act_dim, conv_out, dropout)
+            self.rnn = models.actionGRU(in_dim, rnn_emb, act_dim, conv_out, dropout)
         else:
-            self.rnn = models.actionLSTM(rnn_emb, act_dim, conv_out, dropout)
+            self.rnn = models.actionLSTM(in_dim, rnn_emb, act_dim, conv_out, dropout)
         
         self.mlp = models.MLP(conv_out, 1, dropout)
         
@@ -76,10 +76,10 @@ class ActorCritic(nn.Module):
                  act_dim, final_out, dropout = 0, std=0.0):
         super(ActorCritic, self).__init__()
         
-        self.critic = Critic(conv_out, rnn_type, rnn_emb, act_dim, dropout)
+        self.critic = Critic(num_outputs, conv_out, rnn_type, rnn_emb, act_dim, dropout)
         
         # Make actor into CNN with RNN maybe
-        self.actor = Actor(conv_out, rnn_type, rnn_emb, act_dim, final_out, dropout)
+        self.actor = Actor(num_outputs, conv_out, rnn_type, rnn_emb, act_dim, final_out, dropout)
 
         self.log_std = nn.Parameter(torch.ones(1, num_outputs) * std)
         
@@ -103,10 +103,10 @@ class ActorCriticConv(nn.Module):
 
         self.lenet = models.LeNet(img_size, conv_out, dropout=dropout)
         
-        self.critic = Critic(conv_out, rnn_type, rnn_emb, act_dim, dropout)
+        self.critic = Critic(num_outputs, conv_out, rnn_type, rnn_emb, act_dim, dropout)
         
         # Make actor into CNN with RNN maybe
-        self.actor = Actor(conv_out, rnn_type, rnn_emb, act_dim, final_out, dropout)
+        self.actor = Actor(num_outputs, conv_out, rnn_type, rnn_emb, act_dim, final_out, dropout)
 
         self.log_std = nn.Parameter(torch.ones(1, num_outputs) * std)
         

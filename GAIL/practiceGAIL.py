@@ -27,7 +27,7 @@ mini_batch_size      = 5 # TODO: Check this one out
 seq_size = num_steps = 50
 batch_size = 10
 epochs = 200
-iter_val = 10
+iter_val = 15
 img_size = 64
 lr = 3e-3
 disc_lr = 3e-3
@@ -39,15 +39,15 @@ discrim_hidden_size  = 128
 
 num_outputs = 4
 
-train_game_names = ['Wild_Quest', 'Circle_Kawaii', 'Barbie']
-test_game_names = ['Kawaii_Daycare']
-val_game_names = ['Barbie']
+train_game_names = ['Barbie', 'Kawaii_Fire_Station', 'Kawaii_Playroom', 'Kawaii_Police_Station']
+test_game_names = ['Kawaii_House', 'Kawaii_Daycare']
+val_game_names = ['Kawaii_House', 'Kawaii_Daycare']
 image_path = Template("/data/ysun209/VR.net/videos/${game_session}/video/${imgind}.jpg")
 
 # Create train test split
-train_sessions = DataUtils.read_txt("/data/mala711/COMPSCI715/datasets/barbie_demo_dataset/train.txt")
-val_sessions = DataUtils.read_txt("/data/mala711/COMPSCI715/datasets/barbie_demo_dataset/val.txt")
-test_sessions = DataUtils.read_txt("/data/mala711/COMPSCI715/datasets/barbie_demo_dataset/test.txt")
+train_sessions = DataUtils.read_txt("/data/mala711/COMPSCI715/datasets/final_data_splits/train.txt")
+val_sessions = DataUtils.read_txt("/data/mala711/COMPSCI715/datasets/final_data_splits/val.txt")
+test_sessions = DataUtils.read_txt("/data/mala711/COMPSCI715/datasets/final_data_splits/test.txt")
 
 train_set = MultiGameDataset(train_game_names, train_sessions)
 val_set = MultiGameDataset(val_game_names, val_sessions)

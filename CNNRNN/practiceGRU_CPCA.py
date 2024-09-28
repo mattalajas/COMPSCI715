@@ -22,9 +22,11 @@ from RNNCNNutils import *
 from data_utils_copy import *
 from string import Template
 
-device = torch.device('mps' if torch.backends.mps.is_available() else 'cuda' if torch.cuda.is_available() else 'cpu')
+cuda_num = 5
+device = torch.device('mps' if torch.backends.mps.is_available() else f'cuda:{cuda_num}' if torch.cuda.is_available() else 'cpu')
 # For data collection, change to True if want to evaluate output 
 verbose = True
+save_file = True
 
 if torch.cuda.is_available():
     torch.cuda.empty_cache()
@@ -41,46 +43,68 @@ regularisation = 0.00001
 dropout = 0.2
 rnn_emb = 256
 
+num_outputs= 11
+
 # Aux task hyperparams
 hid_size = 256
 aux_steps = seq_size - start_pred
 sub_rate = 0.1
 loss_fac = 0.5
-aux_reguarisation = 0
-aux_lr = 0.01
 
-train_game_names = ['Wild_Quest', 'Barbie', 'Circle_Kawaii']
-test_game_names = ['Barbie']
-val_game_names = ['Barbie']
+train_game_names = ['Barbie', 'Kawaii_Fire_Station', 'Kawaii_Playroom', 'Kawaii_Police_Station']
+test_game_names = ['Kawaii_House', 'Kawaii_Daycare']
+val_game_names = ['Kawaii_House', 'Kawaii_Daycare']
 image_path = Template("/data/ysun209/VR.net/videos/${game_session}/video/${imgind}.jpg")
 
 # Create train test split
-train_sessions = DataUtils.read_txt("/data/mala711/COMPSCI715/datasets/barbie_demo_dataset/cnnrnnTrain.txt")
-val_sessions = DataUtils.read_txt("/data/mala711/COMPSCI715/datasets/barbie_demo_dataset/cnnrnnVal.txt")
-test_sessions = DataUtils.read_txt("/data/mala711/COMPSCI715/datasets/barbie_demo_dataset/cnnrnnTest.txt")
+train_sessions = DataUtils.read_txt("/data/mala711/COMPSCI715/datasets/final_data_splits/train.txt")
+val_sessions = DataUtils.read_txt("/data/mala711/COMPSCI715/datasets/final_data_splits/val.txt")
+test_sessions = DataUtils.read_txt("/data/mala711/COMPSCI715/datasets/final_data_splits/test.txt")
 
-train_set = MultiGameDataset(train_game_names, train_sessions)
-val_set = MultiGameDataset(val_game_names, val_sessions)
-test_set = MultiGameDataset(test_game_names, test_sessions) 
+col_pred = ["thumbstick_left_x", "thumbstick_left_y", "thumbstick_right_x", "thumbstick_right_y", "head_pos_x", "head_pos_y", "head_pos_z", "head_dir_a", "head_dir_b", "head_dir_c", "head_dir_d"]
+
+train_set = MultiGameDataset(train_game_names, train_sessions, cols_to_predict=col_pred)
+val_set = MultiGameDataset(val_game_names, val_sessions, cols_to_predict=col_pred)
+test_set = MultiGameDataset(test_game_names, test_sessions, cols_to_predict=col_pred) 
+
+# Normalisation
+thumbsticks_loc = 6
+head_pos_loc = 9
+
+train_set.df[train_set.df.columns[2:thumbsticks_loc]] = (train_set.df[train_set.df.columns[2:thumbsticks_loc]] + 1) / 2
+val_set.df[val_set.df.columns[2:thumbsticks_loc]] = (val_set.df[val_set.df.columns[2:thumbsticks_loc]] + 1) / 2
+test_set.df[test_set.df.columns[2:thumbsticks_loc]] = (test_set.df[test_set.df.columns[2:thumbsticks_loc]] + 1) / 2
+
+train_set.df[train_set.df.columns[thumbsticks_loc:head_pos_loc]] = (train_set.df[train_set.df.columns[thumbsticks_loc:head_pos_loc]] + 2) / 4
+val_set.df[val_set.df.columns[thumbsticks_loc:head_pos_loc]] = (val_set.df[val_set.df.columns[thumbsticks_loc:head_pos_loc]] + 2) / 4
+test_set.df[test_set.df.columns[thumbsticks_loc:head_pos_loc]] = (test_set.df[test_set.df.columns[thumbsticks_loc:head_pos_loc]] + 2) / 4
+
+train_set.df[train_set.df.columns[head_pos_loc:]] = (train_set.df[train_set.df.columns[head_pos_loc:]] + 1) / 2
+val_set.df[val_set.df.columns[head_pos_loc:]] = (val_set.df[val_set.df.columns[head_pos_loc:]] + 1) / 2
+test_set.df[test_set.df.columns[head_pos_loc:]] = (test_set.df[test_set.df.columns[head_pos_loc:]] + 1) / 2
 
 train_path_map, train_loader = filter_dataframe(train_sessions, train_set.df, device, seq_size, batch_size, iter=iter_val)
 test_path_map, test_loader = filter_dataframe(test_sessions, test_set.df, device, seq_size, batch_size, iter=iter_val)
 
 # Run tensorboard summary writer
-if verbose: writer = SummaryWriter(f'/data/mala711/COMPSCI715/CNNRNN/runs/GRU_CPCA_train_{train_game_names}_test_{test_game_names}_init_test_seq_size_{seq_size}_seqstart_{start_pred}_iter_{iter_val}_reg_{regularisation}_auxreg_{aux_reguarisation}_lr_{main_lr}_auxlr_{aux_lr}_dropout_{dropout}')
+save_name = f'GRU_CPCA_train_{train_game_names}_test_{test_game_names}_init_test_seq_size_{seq_size}_seqstart_{start_pred}_iter_{iter_val}_reg_{regularisation}_lr_{main_lr}_dropout_{dropout}'
+if verbose: writer = SummaryWriter(f'/data/mala711/COMPSCI715/CNNRNN/runs/{save_name}')
 
 # Initialise models
 init_conv = LeNet(img_size, hid_size, dropout=dropout).to(device)
-init_gru = actionGRU(rnn_emb, hid_size, hid_size, dropout).to(device)
-fin_mlp = MLP(hid_size, 4, dropout).to(device)
-cpca = CPCA(hid_size, aux_steps, sub_rate, loss_fac, dropout, device).to(device)
+init_gru = actionGRU(num_outputs, rnn_emb, hid_size, hid_size, dropout).to(device)
+thumb_fin_mlp = MLP(hid_size, 4, dropout).to(device)
+headpos_fin_mlp = MLP(hid_size, 3, dropout).to(device)
+headdir_fin_mlp = MLP(hid_size, 4, dropout).to(device)
+# cpca = CPCA(num_outputs, hid_size, aux_steps, sub_rate, loss_fac, dropout, device).to(device)
 
 # Initialise optimiser and loss function
 optimizer = torch.optim.Adam([
     {'params': init_conv.parameters()},
     {'params': init_gru.parameters()},
-    {'params': fin_mlp.parameters()},
-    {'params': cpca.parameters(), 'lr': aux_lr}], lr=main_lr)
+    {'params': thumb_fin_mlp.parameters()},
+    {'params': headpos_fin_mlp.parameters()},
+    {'params': headdir_fin_mlp.parameters()}], lr=main_lr)
 # optimizer = torch.optim.Adam([
 #     {'params': init_conv.parameters()},
 #     {'params': init_gru.parameters()},
@@ -92,8 +116,10 @@ criterion = torch.nn.MSELoss()
 def train(loader, path_map, optimizer, criterion):
     init_gru.train()
     init_conv.train()
-    fin_mlp.train()
-    cpca.train()
+    thumb_fin_mlp.train()
+    headpos_fin_mlp.train()
+    headdir_fin_mlp.train()
+    # cpca.train()
     
     total_loss = []
     total_aux = []
@@ -138,7 +164,12 @@ def train(loader, path_map, optimizer, criterion):
             beliefs.append(copy.deepcopy(h0.detach()))
 
             # Final prediction for each frame 
-            fin = fin_mlp(h0)
+            thumb_fin = thumb_fin_mlp(h0)
+            headpos_fin = headpos_fin_mlp(h0)
+            headdir_fin = headdir_fin_mlp(h0)
+
+            fin = torch.cat((thumb_fin, headpos_fin, headdir_fin), dim = 1)
+
             h0 = h0.detach()
 
             # Will only start prediction after certain number of frames
@@ -152,9 +183,9 @@ def train(loader, path_map, optimizer, criterion):
                 preds = torch.cat((preds, y.cpu()))
 
         # Aux task: CPCA
-        image_emb = torch.stack(image_emb, dim = 0).to(device)
-        beliefs = torch.stack(beliefs, dim = 0).to(device)
-        actions = batch[:, :, 2:]
+        # image_emb = torch.stack(image_emb, dim = 0).to(device)
+        # beliefs = torch.stack(beliefs, dim = 0).to(device)
+        # actions = batch[:, :, 2:]
 
         # temp_image_emb = list(range(29))
         # temp_image_emb = torch.Tensor(temp_image_emb).to(device)
@@ -172,34 +203,36 @@ def train(loader, path_map, optimizer, criterion):
         # temp_action_emb = torch.tile(temp_action_emb, (10, 1, 1))
         # # temp_action_emb = temp_action_emb.permute(1, 0, 2)
 
-        aux_losses = []
-        for ind, belief in enumerate(beliefs[1:seq_size-aux_steps]):
-            t = ind+aux_steps+1
-            aux_losses.append(cpca.get_loss(actions[:, ind+1:t, :], image_emb[ind:t-1, :, :], 
-                                      belief, batch.shape[0]))
+        # aux_losses = []
+        # for ind, belief in enumerate(beliefs[1:seq_size-aux_steps]):
+        #     t = ind+aux_steps+1
+        #     aux_losses.append(cpca.get_loss(actions[:, ind+1:t, :], image_emb[ind:t-1, :, :], 
+        #                               belief, batch.shape[0]))
             
         # aux_loss = cpca.get_loss(temp_action_emb[:, start_pred:, :], temp_image_emb[start_pred-1:, :, :], 
         #                             beliefs[start_pred-1], batch_size)
         
-        aux_losses = torch.stack(aux_losses).to(device)
-        aux_loss = torch.mean(aux_losses)
+        # aux_losses = torch.stack(aux_losses).to(device)
+        # aux_loss = torch.mean(aux_losses)
 
         # Regularisation
         l1 = sum(p.abs().sum() for p in init_gru.parameters())
         l1 += sum(p.abs().sum() for p in init_conv.parameters())
-        l1 += sum(p.abs().sum() for p in fin_mlp.parameters())
-        aux_l1 = sum(p.abs().sum() for p in cpca.parameters())
+        l1 += sum(p.abs().sum() for p in thumb_fin_mlp.parameters())
+        l1 += sum(p.abs().sum() for p in headdir_fin_mlp.parameters())
+        l1 += sum(p.abs().sum() for p in headpos_fin_mlp.parameters())
+        # aux_l1 = sum(p.abs().sum() for p in cpca.parameters())
         
         # Loss calculation, gradient calculation, then backprop
         losses = torch.mean(losses)
         # total_loss.append(losses)
 
-        losses += regularisation*l1 + aux_reguarisation*aux_l1 + aux_loss
+        losses += regularisation*l1 # + aux_loss
         losses.backward()
         optimizer.step()
 
         total_loss.append(losses)
-        total_aux.append(aux_loss)
+        # total_aux.append(aux_loss)
 
         prog_bar.update(1)
     prog_bar.close()
@@ -218,7 +251,7 @@ def train(loader, path_map, optimizer, criterion):
     # plt.show()
     
     # Returns evaluation scores
-    return sum(total_loss) / len(loader), total_loss, sum(total_aux) / len(loader)
+    return sum(total_loss) / len(loader), total_loss #, sum(total_aux) / len(loader)
 
 # Test is very similar to training
 # Instead I use RMSE and not MSE
@@ -226,8 +259,10 @@ def train(loader, path_map, optimizer, criterion):
 def test(loader, path_map, criterion):
     init_gru.eval()
     init_conv.eval()
-    fin_mlp.eval()
-    cpca.eval()
+    thumb_fin_mlp.eval()
+    headpos_fin_mlp.eval()
+    headdir_fin_mlp.eval()
+    # cpca.eval()
 
     rmses = torch.empty(0)
     preds = torch.empty(0)
@@ -260,7 +295,13 @@ def test(loader, path_map, criterion):
                 image_r = init_conv(image_t)
                 h0 = init_gru(image_r, batch[:, seq, 2:], h0)
 
-                fin = fin_mlp(h0)
+                thumb_fin = thumb_fin_mlp(h0)
+                headpos_fin = headpos_fin_mlp(h0)
+                headdir_fin = headdir_fin_mlp(h0)
+
+                fin = torch.cat((thumb_fin, headpos_fin, headdir_fin), dim = 1)
+
+                h0 = h0.detach()
 
                 if seq >= start_pred:
                     y = batch[:, seq + 1, 2:]
@@ -290,19 +331,28 @@ def test(loader, path_map, criterion):
 
 # Epoch train + testing
 for epoch in range(1, epochs+1):
-    loss, loss_list, aux_loss = train(train_loader, train_path_map, optimizer, criterion)
+    loss, loss_list = train(train_loader, train_path_map, optimizer, criterion)
     test_mse, test_rmse = test(test_loader, test_path_map, criterion)
 
     # Only add this if val data is available
     # val_rmse, val_ap, val_auc = test(val_loader)
     # print(f'Val AP: {val_ap:.4f}, Val AUC: {val_auc:.4f}')
 
-    print(f'Epoch: {epoch:02d}, Train Loss: {loss:.4f}, Aux Loss: {aux_loss:.4f}, Test MSE: {test_mse:.4f}, Test RMSE: {test_rmse:.4f}')
+    print(f'Epoch: {epoch:02d}, Train Loss: {loss:.4f}, Test MSE: {test_mse:.4f}, Test RMSE: {test_rmse:.4f}')
 
     if verbose:
         writer.add_scalar('training_loss', loss, epoch)
         writer.add_scalar('test_mse', test_mse, epoch)
         writer.add_scalar('test_rmse', test_rmse, epoch)
-        writer.add_scalar('aux_loss:', aux_loss, epoch)
+
+if save_file:
+    torch.save({
+            'init_conv_state_dict': init_conv.state_dict(),
+            'init_gru_state_dict': init_gru.state_dict(),
+            'thumb_fin_mlp_state_dict': thumb_fin_mlp.state_dict(),
+            'headpos_fin_mlp_state_dict': headpos_fin_mlp.state_dict(),
+            'headdir_fin_mlp_state_dict': headdir_fin_mlp.state_dict(),
+            'optimizer_state_dict' : optimizer.state_dict(),
+            }, f"/data/mala711/COMPSCI715/CNNRNN/models/{save_name}.pth")
 
 if verbose: writer.close()
