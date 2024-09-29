@@ -20,6 +20,7 @@ from vit_pytorch.vit_pytorch.vivit import ViT as VideoViT
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 import utils.data_utils as d_u
 
+workers = 16
 
 def process_batch(batch_X, batch_Y, model, loss_func, opt):
     prediction = model(batch_X)
@@ -32,8 +33,8 @@ def process_batch(batch_X, batch_Y, model, loss_func, opt):
     return loss.item()
   
 
-def train_model(model, train_dataset, val_dataset, epochs, batch_size, loss_func, opt, device, save_path, resume=None):
-    dataloader = torch.utils.data.dataloader.DataLoader(train_dataset, batch_size=batch_size, num_workers=8)
+def train_model(model, train_dataset, val_dataset, epochs, batch_size, loss_func, opt, device, save_path, resume=None, sched=None):
+    dataloader = torch.utils.data.dataloader.DataLoader(train_dataset, batch_size=batch_size, num_workers=workers)
     
     tboard = SummaryWriter(save_path)
     
@@ -68,12 +69,15 @@ def train_model(model, train_dataset, val_dataset, epochs, batch_size, loss_func
             
         torch.save(model.state_dict(), save_path + f"/Epoch{i}.pt")
         
+        if sched:
+            sched.step()
+        
     print("\nTraining finished")
 
 
 def evaluate_model(model, dataset, batch_size, loss_func, device):
     model.eval()
-    dataloader = torch.utils.data.dataloader.DataLoader(dataset, batch_size=batch_size, num_workers=8)
+    dataloader = torch.utils.data.dataloader.DataLoader(dataset, batch_size=batch_size, num_workers=workers)
     total_loss = 0
     with torch.no_grad():
         for X, Y in tqdm(dataloader, desc = "Evaluating model", bar_format = "{l_bar}{bar:20}{r_bar}"):
@@ -113,7 +117,7 @@ if __name__ == "__main__":
     val_set = d_u.SingleGameDataset("Barbie", val_sessions, transform=x_test_transform, frame_count=frames)
 
     #select device
-    gpu_num = 5
+    gpu_num = 3
     device = torch.device(f'cuda:{gpu_num}')
     print(f"Using device {gpu_num}: {torch.cuda.get_device_properties(gpu_num).name}")
     
@@ -137,8 +141,9 @@ if __name__ == "__main__":
     weight_decay = 1e-5
     loss_func = torch.nn.MSELoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
+    schedular = torch.optim.lr_scheduler.ExponentialLR(optimizer, 0.99)
     
-    save_dir = "models/vivit_v1"
+    save_dir = "models/vivit_v3"
     
     #train the model
     train_model(model = model,
@@ -150,9 +155,10 @@ if __name__ == "__main__":
                 opt = optimizer,
                 device = device,
                 save_path = save_dir,
-                resume = None)
+                resume = None,
+                sched = schedular)
 
 
 #venv/bin/python COMPSCI715/ViT/train_vit.py
 
-    
+

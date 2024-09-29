@@ -13,7 +13,7 @@ from train_vit import evaluate_model
 
 
 img_size = 512
-frames = 10
+frames = 12
 
 reshape_for_vivit = lambda x: x.transpose(0, 1)
     
@@ -29,7 +29,7 @@ test_sessions = d_u.DataUtils.read_txt("COMPSCI715/datasets/barbie_demo_dataset/
 test_set = d_u.SingleGameDataset("Barbie", test_sessions, transform=x_transform, frame_count=frames)
 
 
-gpu_num = 4
+gpu_num = 3
 device = torch.device(f'cuda:{gpu_num}')
 print(f"Using device {gpu_num}: {torch.cuda.get_device_properties(gpu_num).name}")
 
@@ -48,8 +48,9 @@ model = VideoViT(image_size = img_size,
                     frames = frames,
                     variant = "factorized_encoder").to(device)
 
+model.eval()
 
-model_path = "models/vivit_v1/Epoch19.pt"
+model_path = "models/vivit_v3/Epoch19.pt"
 
 model.load_state_dict(torch.load(model_path, weights_only=True))
 
