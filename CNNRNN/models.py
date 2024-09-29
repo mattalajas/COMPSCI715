@@ -53,7 +53,7 @@ class ConvBasic(nn.Module):
         return flat_out
     
 class LeNet(nn.Module):
-    def __init__(self, size, padding=0, kernel=5, stride=1):
+    def __init__(self, size, final_out, padding=0, kernel=5, stride=1, dropout=0):
         super(LeNet, self).__init__()
         self.conv1 = nn.Conv2d(in_channels=3, out_channels=6, kernel_size=kernel, stride=stride, padding=padding)
         size1 = int((size + 2*padding - kernel)/stride)+1
@@ -67,7 +67,11 @@ class LeNet(nn.Module):
         size3 = int((size2-2)/2)+1
         self.fc1 = nn.Linear(16*size3*size3, 120)
         self.fc2 = nn.Linear(120, 84)
-        self.fc3 = nn.Linear(84, 16)
+        self.fc3 = nn.Linear(84, final_out)
+
+        self.drop1 = nn.Dropout(p = dropout)
+        self.drop2 = nn.Dropout(p = dropout)
+        self.drop3 = nn.Dropout(p = dropout)
 
         self.initialise_weights()
     
@@ -89,11 +93,16 @@ class LeNet(nn.Module):
         
 
     def forward(self, x):
-        out = F.relu(self.batch1(self.conv1(x)))
+        out = self.drop1(x)
+        out = F.relu(self.batch1(self.conv1(out)))
         out = F.max_pool2d(out, 2)
+
+        out = self.drop2(out)
         out = F.relu(self.batch2(self.conv2(out)))
         out = F.max_pool2d(out, 2)
         out = out.reshape(out.size(0), -1)
+
+        out = self.drop3(out)
         out = F.relu(self.fc1(out))
         out = F.relu(self.fc2(out))
         out = self.fc3(out)
@@ -130,13 +139,17 @@ class LeNet(nn.Module):
 
 # Model for memory module GRU
 class actionGRU(nn.Module):
-    def __init__(self):
+    def __init__(self, in_dim, fin_emb, act_dim, img_dim, dropout = 0):
         super(actionGRU, self).__init__()
         # Check input size
-        self.hid1 = nn.Linear(4, 16)
-        self.hid2 = nn.Linear(32, 128)
+        self.hid1 = nn.Linear(in_dim, act_dim)
+        self.hid2 = nn.Linear(act_dim + img_dim, 128)
         self.batch1 = nn.BatchNorm1d(128, track_running_stats=False)
-        self.gru1 = nn.GRUCell(128, 512)
+        self.gru1 = nn.GRUCell(128, fin_emb)
+
+        self.drop1 = nn.Dropout(p = dropout)
+        self.drop2 = nn.Dropout(p = dropout)
+        self.drop3 = nn.Dropout(p = dropout)
     
         self.initialise_weights()
     
@@ -156,25 +169,33 @@ class actionGRU(nn.Module):
     def forward(self, image, action, h0):
         # Encodes thumbstick output using MLP
         act_emb = F.relu(self.hid1(action))
+        act_emb = self.drop1(act_emb)
 
         # Concatenates thumbstick encoding and image encoding
         x = torch.cat((image, act_emb), dim=1)
         x = x.reshape((h0.shape[0], -1))
+        x = self.drop2(x)
+        
         x = F.relu(self.batch1(self.hid2(x)))
-
+        x = self.drop3(x)
+        
         # Feeds concatenated vector to GRU alongside hidden layer output
         out = self.gru1(x, h0)
         return out
 
 # Model for memory module (LSTM)
 class actionLSTM(nn.Module):
-    def __init__(self):
+    def __init__(self, in_dim, fin_emb, act_dim, img_dim, dropout = 0):
         super(actionLSTM, self).__init__()
         # Check input size
-        self.hid1 = nn.Linear(4, 16)
-        self.hid2 = nn.Linear(32, 128)
+        self.hid1 = nn.Linear(in_dim, act_dim)
+        self.hid2 = nn.Linear(act_dim + img_dim, 128)
         self.batch1 = nn.BatchNorm1d(128, track_running_stats=False)
-        self.lstm1 = nn.LSTMCell(128, 512)
+        self.lstm1 = nn.LSTMCell(128, fin_emb)
+
+        self.drop1 = nn.Dropout(p = dropout)
+        self.drop2 = nn.Dropout(p = dropout)
+        self.drop3 = nn.Dropout(p = dropout)
     
         self.initialise_weights()
     
@@ -194,10 +215,15 @@ class actionLSTM(nn.Module):
     def forward(self, image, action, h0, c0):
         # Encodes thumbstick output using MLP
         act_emb = F.relu(self.hid1(action))
+        act_emb = self.drop1(act_emb)
+
         # Concatenates thumbstick encoding and image encoding
         x = torch.cat((image, act_emb), dim=1)
         x = x.reshape((h0.shape[0], -1))
+        x = self.drop2(x)
+
         x = F.relu(self.batch1(self.hid2(x)))
+        x = self.drop3(x)
 
         # Feeds concatenated vector to LSTM alongside hidden layer and cell state
         hx, cx = self.lstm1(x, (h0, c0))
@@ -236,13 +262,17 @@ class actionGRUdeep(nn.Module):
 
 # Standard MLP for fina prediction
 class MLP(nn.Module):
-    def __init__(self):
+    def __init__(self, hid_size, out_size = 4, dropout = 0):
         super(MLP, self).__init__()
         # Check input size
-        self.hidden1 = nn.Linear(512, 256)
+        self.hidden1 = nn.Linear(hid_size, 256)
         self.hidden2 = nn.Linear(256, 64)
-        self.hidden3 = nn.Linear(64, 4)
-    
+        self.hidden3 = nn.Linear(64, out_size)
+
+        self.drop1 = nn.Dropout(p = dropout)
+        self.drop2 = nn.Dropout(p = dropout)
+        self.drop3 = nn.Dropout(p = dropout)
+
         self.initialise_weights()
 
     def initialise_weights(self):
@@ -256,26 +286,29 @@ class MLP(nn.Module):
         torch.nn.init.zeros_(self.hidden3.bias)
 
     def forward(self, x):
-        out = F.relu(self.hidden1(x))
+        out = self.drop1(x)
+        out = F.relu(self.hidden1(out))
+
+        out = self.drop2(out)
         out = F.relu(self.hidden2(out))
+        
+        out = self.drop3(out)
         out = self.hidden3(out)
         return out
 
+class evalMLP(nn.Module):
+    def __init__(self, grid_dims):
+        super(evalMLP, self).__init__()
+        self.x_size, self.y_size = grid_dims
+        # TODO: init input size - b_t + grid_size[0]*grid_size[1]
+        # TODO: change size to accomodate orientation
+        self.hidden1 = nn.Linear(512,  300)
+        self.relu1 = nn.ReLU()
+        self.hidden3 = nn.Linear(300, 4)
+        self.hidden4 = nn.Linear(300, self.x_size * self.y_size)
 
-# # Model isnt being used
-# class evalMLP(nn.Module):
-#     def __init__(self, grid_dims):
-#         super(evalMLP, self).__init__()
-#         self.x_size, self.y_size = grid_dims
-#         # TODO: init input size - b_t + grid_size[0]*grid_size[1]
-#         # TODO: change size to accomodate orientation
-#         self.hidden1 = nn.Linear(512,  300)
-#         self.relu1 = nn.ReLU()
-#         self.hidden3 = nn.Linear(300, 4)
-#         self.hidden4 = nn.Linear(300, self.x_size * self.y_size)
-
-#     def forward(self, x):
-#         out = self.relu1(self.hidden1(x))
-#         out_1 = self.hidden3(out)
-#         out_2 = self.hidden4(out)
-#         return out_2, out_1
+    def forward(self, x):
+        out = self.relu1(self.hidden1(x))
+        out_1 = self.hidden3(out)
+        out_2 = self.hidden4(out)
+        return out_2, out_1

@@ -15,50 +15,90 @@ from sklearn.metrics import (average_precision_score, roc_auc_score,
 from torch.utils.data import DataLoader, TensorDataset
 from torch.utils.tensorboard import SummaryWriter
 
-from models import MLP, LeNet, actionLSTM, actionGRU
-from utils import create_train_test_split
+from models import MLP, ConvBasic, actionGRU
+from RNNCNNutils import create_train_test_split
 
 device = torch.device('mps' if torch.backends.mps.is_available() else 'cuda' if torch.cuda.is_available() else 'cpu')
 # For data collection, change to True if want to evaluate output 
-verbose = True
+verbose = False
 
 if torch.cuda.is_available():
     torch.cuda.empty_cache()
 
+# earth_path = 'Vrnet/files/earth_data_file.csv'
+# wild_path = 'Vrnet/files/wild_data_file.csv'
+
+# earth_gym = pd.read_csv(earth_path)
+# wild_quest = pd.read_csv(wild_path, nrows=2500)
+
+# # Create dataframe for both games
+# earth_fin_gym = pd.DataFrame(data = {'frame': earth_gym['frame'], 'thumbstick': earth_gym['Thumbstick']})
+# wild_fin_gym = pd.DataFrame(data = {'frame': wild_quest['frame'], 'thumbstick': wild_quest['Thumbstick']})
+
+# earth_fin_gym.dropna(how='any', inplace=True)
+# wild_fin_gym.dropna(how='any', inplace=True)
+
+# # Only retrieve thumbstick values
+# earth_fin_gym['thumbstick'] = earth_fin_gym['thumbstick'].apply(lambda x : literal_eval(str(x)))
+# wild_fin_gym['thumbstick'] = wild_fin_gym['thumbstick'].apply(lambda x : literal_eval(str(x)))
+
+# # Seperates them into columns
+# earth_fin_gym[['T1', 'T2', 'T3', 'T4']] = pd.DataFrame(earth_fin_gym['thumbstick'].to_list(), index = earth_fin_gym.index)
+# earth_fin_gym.drop(columns=['thumbstick'], inplace=True)
+
+# wild_fin_gym[['T1', 'T2', 'T3', 'T4']] = pd.DataFrame(wild_fin_gym['thumbstick'].to_list(), index = wild_fin_gym.index)
+# wild_fin_gym.drop(columns=['thumbstick'], inplace=True)
+
 # seq_size = how long is each sequence, start_pred = when to start predicting thumbstick movement
-seq_size = 30
-batch_size = 10
-start_pred = 16
-epochs = 150
-iter_val = 15
-img_size = 64
-learning_rate = 0.01
-regularisation = 0.0001
+seq_size = 150
+batch_size = 1
+start_pred = 100
+epochs = 40
 
 game_name = 'Barbie'
-dir = r"/data/mala711/COMPSCI715/Vrnet"
+dir = r"../Vrnet"
 
-# Create train test split
-path_map, train_loader, test_loader = create_train_test_split(game_name, dir, device, seq_size=seq_size, batch_size=batch_size, iter=iter_val)
+path_map, train_loader, test_loader = create_train_test_split(game_name, dir, device, seq_size=seq_size, batch_size=batch_size)
+
+# # Split gameplay into sequences
+# earth_fin_gym_t = torch.Tensor(earth_fin_gym.values).to(device)
+# earth_fin_gym_t = torch.split(earth_fin_gym_t, seq_size)
+
+# wild_fin_gym_t = torch.Tensor(wild_fin_gym.values).to(device)
+# wild_fin_gym_t = torch.split(wild_fin_gym_t, seq_size)
+
+# # Remove final recoding if it does not fit the batch dimensions
+# if earth_fin_gym_t[-1].shape[0] != seq_size:
+#     earth_fin_gym_t = earth_fin_gym_t[:-1]
+
+# if wild_fin_gym_t[-1].shape[0] != seq_size:
+#     wild_fin_gym_t = wild_fin_gym_t[:-1]
+
+# # Create batches for training and testing
+# train_loader = DataLoader(earth_fin_gym_t, batch_size=batch_size, shuffle=False)
+# train_ind = earth_fin_gym['frame']
+
+# test_loader = DataLoader(wild_fin_gym_t, batch_size=batch_size, shuffle=False)
+# test_ind = wild_fin_gym['frame']
 
 # Run tensorboard summary writer
-if verbose: writer = SummaryWriter(f'/data/mala711/COMPSCI715/CNN-RNN/runs/LSTM_{game_name}_init_test2_seq_size_{seq_size}_seqstart_{start_pred}_iter_{iter_val}_reg_{regularisation}_lr_{learning_rate}')
+if verbose: writer = SummaryWriter(f'runs/{game_name}_init_test_seq_size_{seq_size}_seqstart_{start_pred}')
 
 # Initialise models
-init_conv = LeNet(img_size).to(device)
-init_lstm = actionLSTM().to(device)
+init_conv = ConvBasic().to(device)
+init_gru = actionGRU().to(device)
 fin_mlp = MLP().to(device)
 
 # Initialise optimiser and loss function
 optimizer = torch.optim.Adam(
-    set(init_conv.parameters()) | set(init_lstm.parameters())
-    | set(fin_mlp.parameters()), lr=learning_rate)
+    set(init_conv.parameters()) | set(init_gru.parameters())
+    | set(fin_mlp.parameters()), lr=0.001)
 criterion = torch.nn.MSELoss()
 
 def train(loader, optimizer, criterion):
-    init_lstm.train()
+    init_gru.train()
     init_conv.train()
-    fin_mlp.train()
+    init_gru.train()
     
     total_loss = []
     preds = torch.empty(0)
@@ -66,12 +106,9 @@ def train(loader, optimizer, criterion):
     prog_bar = tqdm.tqdm(range(len(loader)))
     for batch in loader:
         optimizer.zero_grad()
-        # Need to initialise the hidden state for LSTM
-        h0 = torch.zeros((batch.shape[0], 512)).to(device)
+        # Need to initialise the hidden state for GRU
+        h0 = torch.empty((batch.shape[0], 512)).to(device)
         h0 = torch.nn.init.xavier_uniform_(h0)
-
-        c0 = torch.zeros((batch.shape[0], 512)).to(device)
-        c0 = torch.nn.init.xavier_uniform_(c0)
 
         losses = torch.empty(0).to(device)
 
@@ -85,8 +122,8 @@ def train(loader, optimizer, criterion):
             # Reads and encodes the image
             image_t = []
             for i, img_ind in enumerate(indices):
-                image = cv2.imread(f'{path[i]}/video/{int(img_ind)}.jpg')
-                image = cv2.resize(image, (img_size, img_size))
+                image = cv2.imread(f'../{path[i]}/video/{int(img_ind)}.jpg')
+                image = cv2.resize(image, (64, 64))
                 image_t.append(image)
 
             image_t = np.array(image_t)
@@ -96,7 +133,7 @@ def train(loader, optimizer, criterion):
             image_r = init_conv(image_t)
 
             # GRU step per image and its associated thumbstick comman
-            h0, c0 = init_lstm(image_r, batch[:, seq, 2:], h0, c0)
+            h0 = init_gru(image_r, batch[:, seq, 2:], h0)
 
             # Final prediction for each frame 
             fin = fin_mlp(h0)
@@ -111,15 +148,8 @@ def train(loader, optimizer, criterion):
 
                 preds = torch.cat((preds, y.cpu()))
 
-        # Regularisation
-        l1 = sum(p.abs().sum() for p in init_lstm.parameters())
-        l1 += sum(p.abs().sum() for p in init_conv.parameters())
-        l1 += sum(p.abs().sum() for p in fin_mlp.parameters())
-        
         # Loss calculation, gradient calculation, then backprop
         losses = torch.mean(losses)
-
-        losses += regularisation*l1
         losses.backward()
         optimizer.step()
 
@@ -134,25 +164,22 @@ def train(loader, optimizer, criterion):
     
     # if verbose: writer.add_histogram('Training values', values=c, bins=u)
     # print(u)
-    # c = sorted(c, reverse=True)
-    # print(c[0], sum(c[1:]))
+    # print(sorted(c))
 
     # plt.bar(u, c)
     # plt.xticks(rotation=90)
     # plt.show()
     
     # Returns evaluation scores
-    if loader == 0: raise
-    if sum(total_loss) == 0: raise
     return sum(total_loss) / len(loader), total_loss
 
 # Test is very similar to training
 # Instead I use RMSE and not MSE
 # I also used torch no grad to be space efficient
 def test(loader, criterion):
-    init_lstm.eval()
+    init_gru.eval()
     init_conv.eval()
-    fin_mlp.eval()
+    init_gru.eval()
 
     rmses = torch.empty(0)
     preds = torch.empty(0)
@@ -161,13 +188,8 @@ def test(loader, criterion):
 
     with torch.no_grad():
         for batch in loader:
-            h0 = torch.zeros((batch.shape[0], 512)).to(device)
+            h0 = torch.ones((batch.shape[0], 512)).to(device)
             h0 = torch.nn.init.xavier_uniform_(h0)
-            
-            c0 = torch.zeros((batch.shape[0], 512)).to(device)
-            c0 = torch.nn.init.xavier_uniform_(c0)
-
-            losses = torch.empty(0).to(device)
 
             for seq in range(batch.shape[1]-1):
                 # (image_ind, path, T1, T2, T3, T4)
@@ -177,7 +199,7 @@ def test(loader, criterion):
                 
                 image_t = []
                 for i, img_ind in enumerate(indices):
-                    image = cv2.imread(f'{path[i]}/video/{int(img_ind)}.jpg')
+                    image = cv2.imread(f'../{path[i]}/video/{int(img_ind)}.jpg')
                     image = cv2.resize(image, (64, 64))
                     image_t.append(image)
 
@@ -186,7 +208,7 @@ def test(loader, criterion):
                 image_t = torch.Tensor(image_t).to(device)
 
                 image_r = init_conv(image_t)
-                h0, c0 = init_lstm(image_r, batch[:, seq, 2:], h0, c0)
+                h0 = init_gru(image_r, batch[:, seq, 2:], h0)
 
                 fin = fin_mlp(h0)
 
@@ -207,8 +229,7 @@ def test(loader, criterion):
     # u = [str(x) for x in u.tolist()]
     # if verbose: writer.add_histogram('Testing values', values=c, bins=u)
     # print(u)
-    # c = sorted(c, reverse=True)
-    # print(c[0], sum(c[1:]))
+    # print(sorted(c))
     
     # plt.bar(u, c)
     # plt.xticks(rotation=90)

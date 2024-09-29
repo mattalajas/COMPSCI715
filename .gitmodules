@@ -1,5 +1,5 @@
-[submodule "c-rnn-gan.pytorch"]
-	path = c-rnn-gan.pytorch
+[submodule "c_rnn_gan"]
+	path = c_rnn_gan
 	url = https://github.com/HugoPhibbs/c-rnn-gan.pytorch.git
 [submodule "ViT/vit_pytorch"]
 	path = ViT/vit_pytorch
