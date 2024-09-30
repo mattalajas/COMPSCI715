@@ -16,13 +16,12 @@ from typing import Type
 def subsampled_mean(x, p=0.1):
     return torch.masked_select(x, torch.rand_like(x) < p).mean()
 
-ACTION_EMBEDDING_DIM = 4
 
 class CPCA(nn.Module):
     """ Action-conditional CPC - up to k timestep prediction
         From: https://arxiv.org/abs/1811.06407
     """
-    def __init__(self, hid_size, num_steps, sub_rate, loss_fac, dropout, device):
+    def __init__(self, num_output, hid_size, num_steps, sub_rate, loss_fac, dropout, device):
         super(CPCA, self).__init__()
 
         self.hid_size = hid_size
@@ -44,7 +43,7 @@ class CPCA(nn.Module):
             nn.Linear(32, 1)) for _ in range(self.num_steps)]
         
         self.mlp = nn.ModuleList(cpc_clf)
-        self.query_gru = nn.GRU(ACTION_EMBEDDING_DIM, hid_size)
+        self.query_gru = nn.GRU(num_output, hid_size)
 
     def get_loss(self, actions, vision, belief_features, n = 1):
         '''
@@ -103,16 +102,17 @@ class CPCA_Weighted(nn.Module):
     """ To compare with combined aux losses. 5 * k<=1, 4 * k<=2, 3 * k<=4, 2 * k <= 8, 1 * k <= 16 (hardcoded)
         Note - this aux loss is an order of magnitude higher than others (intentionally)
     """
-    def __init__(self, cfg, aux_cfg, task_cfg, device):
-        super().__init__(cfg, aux_cfg, task_cfg, device)
+    def __init__(self, num_output, cfg, aux_cfg, task_cfg, device):
+        super().__init__(cfg, num_output, aux_cfg, task_cfg, device)
         num_actions = len(task_cfg.POSSIBLE_ACTIONS)
+        self.num_output = num_output
         self.classifier = nn.Sequential(
             nn.Linear(2 * cfg.hidden_size, 32),
             nn.ReLU(),
             nn.Linear(32, 1)
         ) # query and perception
-        self.action_embedder = nn.Embedding(num_actions + 1, ACTION_EMBEDDING_DIM)
-        self.query_gru = nn.GRU(ACTION_EMBEDDING_DIM, cfg.hidden_size)
+        self.action_embedder = nn.Embedding(num_actions + 1, num_output)
+        self.query_gru = nn.GRU(num_output, cfg.hidden_size)
 
     def get_loss(self, observations, actions, vision, final_belief_state, belief_features, n, t, env_zeros):
         k = 16
@@ -126,10 +126,10 @@ class CPCA_Weighted(nn.Module):
             index=negative_inds.view(t * n, 1).expand(t * n, positives.size(-1)),
         ).view(t, n, -1)
         action_embedding = self.action_embedder(actions) # t n -1
-        action_padding = torch.zeros(k - 1, n, ACTION_EMBEDDING_DIM, device=self.device)
+        action_padding = torch.zeros(k - 1, n, self.num_output, device=self.device)
         action_padded = torch.cat((action_embedding, action_padding), dim=0) # (t+k-1) x n x -1
         # t x n x -1 x k
-        action_seq = action_padded.unfold(dimension=0, size=k, step=1).permute(3, 0, 1, 2).view(k, t*n, ACTION_EMBEDDING_DIM)
+        action_seq = action_padded.unfold(dimension=0, size=k, step=1).permute(3, 0, 1, 2).view(k, t*n, self.num_output)
 
         # for each timestep, predict up to k ahead -> (t,k) is query for t + k (+ 1) (since k is 0-indexed) i.e. (0, 0) -> query for 1
         out_all, _ = self.query_gru(action_seq, belief_features)

@@ -78,7 +78,8 @@ def filter_dataframe(game_sessions, data_frame, device, seq_size = 150, batch_si
     for game_session in game_sessions:
         cur_df = df_groups.get_group(game_session)
         cur_df = cur_df[::iter]
-        cur_df = cur_df[:-(len(cur_df)%seq_size)]
+        if len(cur_df)%seq_size:
+            cur_df = cur_df[:-(len(cur_df)%seq_size)]
 
         path_map[counter] = game_session # f"/data/ysun209/VR.net/videos/{game_session}" #/video/{frame}.jpg"
         cur_df['game_session'] = counter

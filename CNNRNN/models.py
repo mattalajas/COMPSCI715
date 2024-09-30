@@ -139,10 +139,10 @@ class LeNet(nn.Module):
 
 # Model for memory module GRU
 class actionGRU(nn.Module):
-    def __init__(self, fin_emb, act_dim, img_dim, dropout = 0):
+    def __init__(self, in_dim, fin_emb, act_dim, img_dim, dropout = 0):
         super(actionGRU, self).__init__()
         # Check input size
-        self.hid1 = nn.Linear(4, act_dim)
+        self.hid1 = nn.Linear(in_dim, act_dim)
         self.hid2 = nn.Linear(act_dim + img_dim, 128)
         self.batch1 = nn.BatchNorm1d(128, track_running_stats=False)
         self.gru1 = nn.GRUCell(128, fin_emb)
@@ -185,10 +185,10 @@ class actionGRU(nn.Module):
 
 # Model for memory module (LSTM)
 class actionLSTM(nn.Module):
-    def __init__(self, fin_emb, act_dim, img_dim, dropout = 0):
+    def __init__(self, in_dim, fin_emb, act_dim, img_dim, dropout = 0):
         super(actionLSTM, self).__init__()
         # Check input size
-        self.hid1 = nn.Linear(4, act_dim)
+        self.hid1 = nn.Linear(in_dim, act_dim)
         self.hid2 = nn.Linear(act_dim + img_dim, 128)
         self.batch1 = nn.BatchNorm1d(128, track_running_stats=False)
         self.lstm1 = nn.LSTMCell(128, fin_emb)
