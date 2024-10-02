@@ -1,1 +1,2 @@
 fastparquet==2024.5.0
+gdown==5.2.0
