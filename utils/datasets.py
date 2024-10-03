@@ -56,22 +56,22 @@ class DatasetTemplate(Dataset):
 
         if self.frame_count == 1:
             # Read single image
-            x = read_image(self.get_im_path(session, data_row["frame"]))
+            x = read_image(self.get_im_path(session, data_row["frame"])).float()
         else:
             # read multiple images
             x = []
             for i in range(0, self.frame_count):
                 x.append(read_image(self.get_im_path(session, int(data_row[f"frame_{i}"]))))
-            x = torch.from_numpy(np.array(x))
+            x = (torch.from_numpy(np.array(x))).float()
 
         if len(self.cols_to_keep):
             control_vector = data_row[self.cols_to_keep]
-            control_vector = torch.from_numpy(control_vector.to_numpy().astype(float))
+            control_vector = (torch.from_numpy(control_vector.to_numpy())).float()
             x = (x, control_vector)
 
         # read target
         y = data_row[self.cols_to_predict]
-        y = torch.from_numpy(y.to_numpy().astype(float))
+        y = (torch.from_numpy(y.to_numpy().astype(float))).float()
 
         # apply transformations
         if self.transform: x = self.transform(x)

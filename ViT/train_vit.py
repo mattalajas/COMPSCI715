@@ -18,7 +18,8 @@ from vit_pytorch.vit_pytorch.vivit import ViT as VideoViT
 
 #add path to import data utils
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-import utils.data_utils as d_u
+from utils.data_utils import DataUtils as d_u
+from utils.datasets import SingleGameDataset, MultiGameDataset
 
 workers = 16
 
@@ -91,7 +92,7 @@ def evaluate_model(model, dataset, batch_size, loss_func, device):
 
 if __name__ == "__main__":
     img_size = 512
-    frames = 12
+    frames = 10
     
     reshape_for_vivit = lambda x: x.transpose(0, 1)
     
@@ -103,21 +104,50 @@ if __name__ == "__main__":
         #v2.GaussianNoise()
     ])
     
-    
     x_test_transform = v2.Compose([
         v2.Resize((img_size, img_size)),
         reshape_for_vivit
     ])
     
-    #setup train and validation sets
-    train_sessions = d_u.DataUtils.read_txt("COMPSCI715/datasets/barbie_demo_dataset/train.txt")
-    train_set = d_u.SingleGameDataset("Barbie", train_sessions, transform=x_train_transform, frame_count=frames)
+    #Barbie
+    #train_sessions =d_u.read_txt("/data/kraw084/COMPSCI715/datasets/final_data_splits/train.txt")
+    #val_sessions = d_u.read_txt("/data/kraw084/COMPSCI715/datasets/final_data_splits/val.txt")
     
-    val_sessions = d_u.DataUtils.read_txt("COMPSCI715/datasets/barbie_demo_dataset/val.txt")
-    val_set = d_u.SingleGameDataset("Barbie", val_sessions, transform=x_test_transform, frame_count=frames)
+    #Multi game dataset
+    train_game_names = ['Barbie', 'Kawaii_Fire_Station', 'Kawaii_Playroom', 'Kawaii_Police_Station']
+    val_game_names = ['Kawaii_House', 'Kawaii_Daycare']
+    train_sessions =d_u.read_txt("/data/kraw084/COMPSCI715/datasets/final_data_splits/train.txt")
+    val_sessions = d_u.read_txt("/data/kraw084/COMPSCI715/datasets/final_data_splits/val.txt")
+
+    col_pred = ["thumbstick_left_x", "thumbstick_left_y", "thumbstick_right_x", "thumbstick_right_y", "head_pos_x", "head_pos_y", "head_pos_z", "head_dir_a", "head_dir_b", "head_dir_c", "head_dir_d"]
+
+    train_set = MultiGameDataset(train_game_names, train_sessions, cols_to_predict=col_pred, frame_count=frames, transform=x_train_transform)
+    val_set = MultiGameDataset(val_game_names, val_sessions, cols_to_predict=col_pred, frame_count=frames, transform=x_test_transform)
+
+    # Normalisation
+    thumbstick_start = 2 + frames - 1
+    thumbsticks_loc = thumbstick_start + 4
+    head_pos_loc = thumbsticks_loc + 3
+
+    train_set.df[train_set.df.columns[thumbstick_start:thumbsticks_loc]] = (train_set.df[train_set.df.columns[thumbstick_start:thumbsticks_loc]] + 1) / 2
+    val_set.df[val_set.df.columns[thumbstick_start:thumbsticks_loc]] = (val_set.df[val_set.df.columns[thumbstick_start:thumbsticks_loc]] + 1) / 2
+
+    train_set.df[train_set.df.columns[thumbsticks_loc:head_pos_loc]] = (train_set.df[train_set.df.columns[thumbsticks_loc:head_pos_loc]] + 2) / 4
+    val_set.df[val_set.df.columns[thumbsticks_loc:head_pos_loc]] = (val_set.df[val_set.df.columns[thumbsticks_loc:head_pos_loc]] + 2) / 4
+    
+    train_set.df[train_set.df.columns[head_pos_loc:]] = (train_set.df[train_set.df.columns[head_pos_loc:]] + 1) / 2
+    val_set.df[val_set.df.columns[head_pos_loc:]] = (val_set.df[val_set.df.columns[head_pos_loc:]] + 1) / 2
+    
+ 
+    #setup train and validation sets
+    #train_sessions = d_u.read_txt("COMPSCI715/datasets/barbie_demo_dataset/train.txt")
+    #train_set = SingleGameDataset("Barbie", train_sessions, transform=x_train_transform, frame_count=frames)
+    
+    #val_sessions = d_u.read_txt("COMPSCI715/datasets/barbie_demo_dataset/val.txt")
+    #val_set = SingleGameDataset("Barbie", val_sessions, transform=x_test_transform, frame_count=frames)
 
     #select device
-    gpu_num = 3
+    gpu_num = 0
     device = torch.device(f'cuda:{gpu_num}')
     print(f"Using device {gpu_num}: {torch.cuda.get_device_properties(gpu_num).name}")
     
@@ -143,13 +173,13 @@ if __name__ == "__main__":
     optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
     schedular = torch.optim.lr_scheduler.ExponentialLR(optimizer, 0.99)
     
-    save_dir = "models/vivit_v3"
+    save_dir = "models/vivit_multigame_full_controls"
     
     #train the model
     train_model(model = model,
                 train_dataset = train_set,
                 val_dataset = val_set,
-                epochs = 100,
+                epochs = 25,
                 batch_size = 128,
                 loss_func = loss_func,
                 opt = optimizer,
