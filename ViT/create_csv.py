@@ -34,7 +34,7 @@ x_test_transform = v2.Compose([
 
 train_game_names = ['Barbie', 'Kawaii_Fire_Station', 'Kawaii_Playroom', 'Kawaii_Police_Station']
 test_game_names = ['Kawaii_House', 'Kawaii_Daycare']
-test_sessions = d_u.read_txt("/data/kraw084/COMPSCI715/datasets/final_data_splits/val.txt")
+test_sessions = d_u.read_txt("/data/kraw084/COMPSCI715/datasets/final_data_splits/test.txt")
 
 col_pred = ["thumbstick_left_x", "thumbstick_left_y", "thumbstick_right_x", "thumbstick_right_y", "head_pos_x", "head_pos_y", "head_pos_z", "head_dir_a", "head_dir_b", "head_dir_c", "head_dir_d"]
 
