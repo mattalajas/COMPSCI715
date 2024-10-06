@@ -29,8 +29,8 @@ mini_batch_size      = 10 # TODO: Check this one out
 # Main task hyperparams
 seq_size = num_steps = 50
 batch_size = 10
-epochs = 1
-iter_val = 15
+epochs = 150
+iter_val = 10
 img_size = 64
 lr = 3e-2
 disc_lr = 3e-3
@@ -40,19 +40,19 @@ hid_size = 256
 rnn_type = 'gru'
 discrim_hidden_size  = 128
 weight_decay = 5e-3
+early_stop = 45
 
 num_outputs = 11
 
-save_path = "/data/mala711/COMPSCI715/GAIL/models/"
-
-train_game_names = ['Barbie', 'Kawaii_Fire_Station', 'Kawaii_Playroom', 'Kawaii_Police_Station']
-test_game_names = ['Kawaii_House', 'Kawaii_Daycare']
+train_game_names = ['Barbie']
+test_game_names = ['Barbie']
 val_game_names = ['Kawaii_House', 'Kawaii_Daycare']
 image_path = Template("/data/ysun209/VR.net/videos/${game_session}/video/${imgind}.jpg")
 
 # Create train test split
+train_sessions = DataUtils.read_txt("/data/mala711/COMPSCI715/datasets/barbie_demo_dataset/train.txt")
 val_sessions = DataUtils.read_txt("/data/mala711/COMPSCI715/datasets/final_data_splits/val.txt")
-test_sessions = DataUtils.read_txt("/data/mala711/COMPSCI715/datasets/final_data_splits/test.txt")
+test_sessions = DataUtils.read_txt("/data/mala711/COMPSCI715/datasets/barbie_demo_dataset/test.txt")
 
 col_pred = ["thumbstick_left_x", "thumbstick_left_y", "thumbstick_right_x", "thumbstick_right_y", "head_pos_x", "head_pos_y", "head_pos_z", "head_dir_a", "head_dir_b", "head_dir_c", "head_dir_d"]
 
@@ -248,7 +248,9 @@ def test(loader, path_map, model_img_encoder, disc_img_encoder, model, discrimin
     mean_discrim_loss = sum(discrim_losses) / len(discrim_losses)
     mean_discrim_loss = mean_discrim_loss.cpu().item()
 
-    mean_rewards = sum(all_rewards) / len(all_rewards)
+    all_rewards = torch.stack(all_rewards)
+    mean_rewards = torch.mean(all_rewards, 0)
+    mean_rewards = torch.mean(mean_rewards, 0)
     mean_rewards = mean_rewards.cpu().item()
 
     return mean_discrim_loss, mean_rewards, fin_df
