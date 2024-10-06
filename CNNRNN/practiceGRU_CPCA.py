@@ -35,7 +35,7 @@ if torch.cuda.is_available():
 seq_size = 50
 batch_size = 10
 start_pred = 20
-epochs = 150
+epochs = 50
 iter_val = 10
 img_size = 64
 main_lr= 0.01
@@ -45,21 +45,23 @@ rnn_emb = 256
 
 num_outputs= 11
 
+weighted = True
+
 # Aux task hyperparams
 hid_size = 256
 aux_steps = seq_size - start_pred
 sub_rate = 0.1
 loss_fac = 0.5
 
-train_game_names = ['Barbie', 'Kawaii_Fire_Station', 'Kawaii_Playroom', 'Kawaii_Police_Station']
-test_game_names = ['Kawaii_House', 'Kawaii_Daycare']
+train_game_names = ['Barbie']
+test_game_names = ['Barbie']
 val_game_names = ['Kawaii_House', 'Kawaii_Daycare']
 image_path = Template("/data/ysun209/VR.net/videos/${game_session}/video/${imgind}.jpg")
 
 # Create train test split
-train_sessions = DataUtils.read_txt("/data/mala711/COMPSCI715/datasets/final_data_splits/train.txt")
+train_sessions = DataUtils.read_txt("/data/mala711/COMPSCI715/datasets/barbie_demo_dataset/train.txt")
 val_sessions = DataUtils.read_txt("/data/mala711/COMPSCI715/datasets/final_data_splits/val.txt")
-test_sessions = DataUtils.read_txt("/data/mala711/COMPSCI715/datasets/final_data_splits/test.txt")
+test_sessions = DataUtils.read_txt("/data/mala711/COMPSCI715/datasets/barbie_demo_dataset/test.txt")
 
 col_pred = ["thumbstick_left_x", "thumbstick_left_y", "thumbstick_right_x", "thumbstick_right_y", "head_pos_x", "head_pos_y", "head_pos_z", "head_dir_a", "head_dir_b", "head_dir_c", "head_dir_d"]
 
@@ -87,7 +89,7 @@ train_path_map, train_loader = filter_dataframe(train_sessions, train_set.df, de
 test_path_map, test_loader = filter_dataframe(test_sessions, test_set.df, device, seq_size, batch_size, iter=iter_val)
 
 # Run tensorboard summary writer
-save_name = f'GRU_CPCA_train_{train_game_names}_test_{test_game_names}_init_test_seq_size_{seq_size}_seqstart_{start_pred}_iter_{iter_val}_reg_{regularisation}_lr_{main_lr}_dropout_{dropout}'
+save_name = f'GRU_CPCA_train_{train_game_names}_test_{test_game_names}_init_test_seq_size_{seq_size}_seqstart_{start_pred}_iter_{iter_val}_reg_{regularisation}_lr_{main_lr}_dropout_{dropout}_weighting_{weighted}'
 if verbose: writer = SummaryWriter(f'/data/mala711/COMPSCI715/CNNRNN/runs/{save_name}')
 
 # Initialise models
@@ -112,6 +114,11 @@ optimizer = torch.optim.Adam([
 # optimizer = torch.optim.Adam([
 #     {'params': cpca.parameters(), 'lr': aux_lr}], lr=main_lr)
 criterion = torch.nn.MSELoss()
+
+def weighted_mse_loss(input, target, weight):
+    return (weight * (input - target) ** 2)
+
+criterion = weighted_mse_loss
 
 def train(loader, path_map, optimizer, criterion):
     init_gru.train()
@@ -175,9 +182,14 @@ def train(loader, path_map, optimizer, criterion):
             # Will only start prediction after certain number of frames
             if seq >= start_pred:
                 y = batch[:, seq + 1, 2:]
+                weights = torch.ones_like(y).to(device)
+
+                if weighted:
+                    weights = torch.abs(0.5 - y) / 0.5
 
                 # Loss calculation and appending to total loss
-                loss = criterion(fin, y)
+                loss = criterion(fin, y, weights)
+                loss = torch.mean(loss)
                 losses = torch.cat((losses, loss.reshape(1)))
 
                 preds = torch.cat((preds, y.cpu()))
@@ -306,8 +318,14 @@ def test(loader, path_map, criterion):
                 if seq >= start_pred:
                     y = batch[:, seq + 1, 2:]
 
-                    preds = torch.cat((preds, y.cpu()))
-                    loss = criterion(fin, y)
+                    weights = torch.ones_like(y).to(device)
+
+                    if weighted:
+                        weights = torch.abs(0.5 - y) / 0.5
+
+                    # Loss calculation and appending to total loss
+                    loss = criterion(fin, y, weights)
+                    loss = torch.mean(loss)
                     losses = torch.cat((losses, loss.reshape(1)))
             
             losses = torch.mean(losses)
