@@ -152,7 +152,7 @@ class Discriminator(nn.Module):
             h0 = self.hlinear(torch.cat([h0_c, h0_a], 1))
             h0 = torch.unsqueeze(h0, 0)
 
-            x, _ = self.rnn(x, h0)
+            _, h = self.rnn(x, h0)
         else:
             h0 = self.hlinear(torch.cat([h0_c, h0_a], 1))
             c0 = self.clinear(torch.cat([c0_c, c0_a], 1))
@@ -160,15 +160,16 @@ class Discriminator(nn.Module):
             h0 = torch.unsqueeze(h0, 0)
             c0 = torch.unsqueeze(c0, 0)
 
-            x, _= self.rnn(x, (h0, c0))
+            _, h = self.rnn(x, (h0, c0))
 
-        x = self.drop1(x)
-        x = F.tanh(self.linear1(x))
-        out = F.sigmoid(self.linear2(x))
+        h = self.drop1(h)
+        h = F.tanh(self.linear1(h))
+        out = F.sigmoid(self.linear2(h))
+        out = out.view(-1, 1)
 
-        num_dims = len(out.shape)
-        reduction_dims = tuple(range(1, num_dims))
-        out = torch.mean(out, dim=reduction_dims)
+        # num_dims = len(out.shape)
+        # reduction_dims = tuple(range(1, num_dims))
+        # out = torch.mean(out, dim=reduction_dims)
 
         return out
 

@@ -170,6 +170,7 @@ pipenv
 runs
 */runs
 .idea
-
+models
+csv_files
 
 datasets/parquet

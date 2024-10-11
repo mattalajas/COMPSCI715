@@ -30,7 +30,7 @@ mini_batch_size      = 10 # TODO: Check this one out
 seq_size = num_steps = 50
 batch_size = 10
 epochs = 150
-iter_val = 15
+iter_val = 10
 img_size = 64
 lr = 3e-2
 disc_lr = 3e-3
@@ -40,18 +40,19 @@ hid_size = 256
 rnn_type = 'gru'
 discrim_hidden_size  = 128
 weight_decay = 5e-3
+early_stop = 35
 
 num_outputs = 11
 
-train_game_names = ['Barbie', 'Kawaii_Fire_Station', 'Kawaii_Playroom', 'Kawaii_Police_Station']
-test_game_names = ['Kawaii_House', 'Kawaii_Daycare']
+train_game_names = ['Barbie']
+test_game_names = ['Barbie']
 val_game_names = ['Kawaii_House', 'Kawaii_Daycare']
 image_path = Template("/data/ysun209/VR.net/videos/${game_session}/video/${imgind}.jpg")
 
 # Create train test split
-train_sessions = DataUtils.read_txt("/data/mala711/COMPSCI715/datasets/final_data_splits/train.txt")
+train_sessions = DataUtils.read_txt("/data/mala711/COMPSCI715/datasets/barbie_demo_dataset/train.txt")
 val_sessions = DataUtils.read_txt("/data/mala711/COMPSCI715/datasets/final_data_splits/val.txt")
-test_sessions = DataUtils.read_txt("/data/mala711/COMPSCI715/datasets/final_data_splits/test.txt")
+test_sessions = DataUtils.read_txt("/data/mala711/COMPSCI715/datasets/barbie_demo_dataset/test.txt")
 
 col_pred = ["thumbstick_left_x", "thumbstick_left_y", "thumbstick_right_x", "thumbstick_right_y", "head_pos_x", "head_pos_y", "head_pos_z", "head_dir_a", "head_dir_b", "head_dir_c", "head_dir_d"]
 
@@ -250,7 +251,9 @@ def train(loader, path_map, model_img_encoder, disc_img_encoder,\
     mean_discrim_loss = sum(discrim_losses) / len(discrim_losses)
     mean_discrim_loss = mean_discrim_loss.detach().cpu().item()
 
-    mean_rewards = sum(all_rewards) / len(all_rewards)
+    all_rewards = torch.stack(all_rewards)
+    mean_rewards = torch.mean(all_rewards, 0)
+    mean_rewards = torch.mean(mean_rewards, 0)
     mean_rewards = mean_rewards.detach().cpu().item()
 
     return mean_ppo_loss, mean_discrim_loss, mean_rewards
@@ -381,7 +384,9 @@ def test(loader, path_map, model_img_encoder, disc_img_encoder, model, discrimin
     mean_discrim_loss = sum(discrim_losses) / len(discrim_losses)
     mean_discrim_loss = mean_discrim_loss.cpu().item()
 
-    mean_rewards = sum(all_rewards) / len(all_rewards)
+    all_rewards = torch.stack(all_rewards)
+    mean_rewards = torch.mean(all_rewards, 0)
+    mean_rewards = torch.mean(mean_rewards, 0)
     mean_rewards = mean_rewards.cpu().item()
 
     return mean_discrim_loss, mean_rewards
@@ -396,6 +401,9 @@ for epoch in range(1, epochs+1):
     # Only add this if val data is available
     # val_rmse, val_ap, val_auc = test(val_loader)
     # print(f'Val AP: {val_ap:.4f}, Val AUC: {val_auc:.4f}')
+
+    if epoch == early_stop:
+        break
 
     print(f'Epoch: {epoch:02d}, Train PPO Loss: {train_ppo_loss:.4f}, Train Discrim MSE: {train_discrim_loss:.4f}, Train Reward: {train_rewards:.4f}')
     print(f'Test Discrim MSE: {test_discrim_loss:.4f}, Test Reward: {test_rewards:.4f}')

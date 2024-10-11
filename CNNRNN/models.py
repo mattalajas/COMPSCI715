@@ -294,6 +294,9 @@ class MLP(nn.Module):
         
         out = self.drop3(out)
         out = self.hidden3(out)
+
+        # Sigmoid (remove if it doesnt make it better)
+        out = F.sigmoid(out)
         return out
 
 class evalMLP(nn.Module):

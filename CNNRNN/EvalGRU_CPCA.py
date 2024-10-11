@@ -26,7 +26,7 @@ cuda_num = 5
 device = torch.device('mps' if torch.backends.mps.is_available() else f'cuda:{cuda_num}' if torch.cuda.is_available() else 'cpu')
 # For data collection, change to True if want to evaluate output 
 verbose = False
-save_df = True
+save_df = False
 
 if torch.cuda.is_available():
     torch.cuda.empty_cache()
@@ -35,7 +35,7 @@ if torch.cuda.is_available():
 seq_size = 50
 batch_size = 10
 start_pred = 20
-epochs = 150
+epochs = 50
 iter_val = 10
 img_size = 64
 main_lr= 0.01
@@ -53,17 +53,26 @@ loss_fac = 0.5
 aux_reguarisation = 0
 aux_lr = 0.01
 
+weighting = True
+
 train_game_names = ['Barbie', 'Kawaii_Fire_Station', 'Kawaii_Playroom', 'Kawaii_Police_Station']
 test_game_names = ['Kawaii_House', 'Kawaii_Daycare']
 val_game_names = ['Kawaii_House', 'Kawaii_Daycare']
+
+
+# train_game_names = ['Barbie']
+# test_game_names = ['Barbie']
+# val_game_names = ['Barbie']
 image_path = Template("/data/ysun209/VR.net/videos/${game_session}/video/${imgind}.jpg")
 
 # Create train test split
+train_sessions = DataUtils.read_txt("/data/mala711/COMPSCI715/datasets/final_data_splits/train.txt")
 val_sessions = DataUtils.read_txt("/data/mala711/COMPSCI715/datasets/final_data_splits/val.txt")
 test_sessions = DataUtils.read_txt("/data/mala711/COMPSCI715/datasets/final_data_splits/test.txt")
 
 col_pred = ["thumbstick_left_x", "thumbstick_left_y", "thumbstick_right_x", "thumbstick_right_y", "head_pos_x", "head_pos_y", "head_pos_z", "head_dir_a", "head_dir_b", "head_dir_c", "head_dir_d"]
 
+train_set = MultiGameDataset(train_game_names, train_sessions, cols_to_predict=col_pred)
 val_set = MultiGameDataset(val_game_names, val_sessions, cols_to_predict=col_pred)
 test_set = MultiGameDataset(test_game_names, test_sessions, cols_to_predict=col_pred) 
 
@@ -71,19 +80,24 @@ test_set = MultiGameDataset(test_game_names, test_sessions, cols_to_predict=col_
 thumbsticks_loc = 6
 head_pos_loc = 9
 
+train_set.df[train_set.df.columns[2:thumbsticks_loc]] = (train_set.df[train_set.df.columns[2:thumbsticks_loc]] + 1) / 2
 val_set.df[val_set.df.columns[2:thumbsticks_loc]] = (val_set.df[val_set.df.columns[2:thumbsticks_loc]] + 1) / 2
 test_set.df[test_set.df.columns[2:thumbsticks_loc]] = (test_set.df[test_set.df.columns[2:thumbsticks_loc]] + 1) / 2
 
+train_set.df[train_set.df.columns[thumbsticks_loc:head_pos_loc]] = (train_set.df[train_set.df.columns[thumbsticks_loc:head_pos_loc]] + 2) / 4
 val_set.df[val_set.df.columns[thumbsticks_loc:head_pos_loc]] = (val_set.df[val_set.df.columns[thumbsticks_loc:head_pos_loc]] + 2) / 4
 test_set.df[test_set.df.columns[thumbsticks_loc:head_pos_loc]] = (test_set.df[test_set.df.columns[thumbsticks_loc:head_pos_loc]] + 2) / 4
 
+train_set.df[train_set.df.columns[head_pos_loc:]] = (train_set.df[train_set.df.columns[head_pos_loc:]] + 1) / 2
 val_set.df[val_set.df.columns[head_pos_loc:]] = (val_set.df[val_set.df.columns[head_pos_loc:]] + 1) / 2
 test_set.df[test_set.df.columns[head_pos_loc:]] = (test_set.df[test_set.df.columns[head_pos_loc:]] + 1) / 2
 
+train_path_map, train_loader = filter_dataframe(train_sessions, train_set.df, device, seq_size, batch_size, iter=iter_val)
 test_path_map, test_loader = filter_dataframe(test_sessions, test_set.df, device, seq_size, batch_size, iter=iter_val)
+val_path_map, val_loader = filter_dataframe(val_sessions, val_set.df, device, seq_size, batch_size, iter=iter_val)
 
 # Run tensorboard summary writer
-common_name = f'GRU_CPCA_train_{train_game_names}_test_{test_game_names}_init_test_seq_size_{seq_size}_seqstart_{start_pred}_iter_{iter_val}_reg_{regularisation}_auxreg_{aux_reguarisation}_lr_{main_lr}_auxlr_{aux_lr}_dropout_{dropout}'
+common_name = f'GRU_CPCA_train_{train_game_names}_test_{test_game_names}_init_test_seq_size_{seq_size}_seqstart_{start_pred}_iter_{iter_val}_reg_{regularisation}_lr_{main_lr}_dropout_{dropout}_weighting_{weighting}'
 if verbose: writer = SummaryWriter(f'/data/mala711/COMPSCI715/CNNRNN/runs/Eval{common_name}')
 
 # Initialise models
@@ -92,7 +106,7 @@ init_gru = actionGRU(num_outputs, rnn_emb, hid_size, hid_size, dropout).to(devic
 thumb_fin_mlp = MLP(hid_size, 4, dropout).to(device)
 headpos_fin_mlp = MLP(hid_size, 3, dropout).to(device)
 headdir_fin_mlp = MLP(hid_size, 4, dropout).to(device)
-cpca = CPCA(num_outputs, hid_size, aux_steps, sub_rate, loss_fac, dropout, device).to(device)
+# cpca = CPCA(num_outputs, hid_size, aux_steps, sub_rate, loss_fac, dropout, device).to(device)
 
 # Initialise optimiser and loss function
 optimizer = torch.optim.Adam([
@@ -100,8 +114,7 @@ optimizer = torch.optim.Adam([
     {'params': init_gru.parameters()},
     {'params': thumb_fin_mlp.parameters()},
     {'params': headpos_fin_mlp.parameters()},
-    {'params': headdir_fin_mlp.parameters()},
-    {'params': cpca.parameters(), 'lr': aux_lr}], lr=main_lr)
+    {'params': headdir_fin_mlp.parameters()}], lr=main_lr)
 # optimizer = torch.optim.Adam([
 #     {'params': init_conv.parameters()},
 #     {'params': init_gru.parameters()},
@@ -118,7 +131,6 @@ init_gru.load_state_dict(checkpoint['init_gru_state_dict'])
 thumb_fin_mlp.load_state_dict(checkpoint['thumb_fin_mlp_state_dict'])
 headpos_fin_mlp.load_state_dict(checkpoint['headpos_fin_mlp_state_dict'])
 headdir_fin_mlp.load_state_dict(checkpoint['headdir_fin_mlp_state_dict'])
-cpca.load_state_dict(checkpoint['cpca_state_dict'])
 optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
 
 # Test is very similar to training
@@ -130,7 +142,6 @@ def test(loader, path_map, criterion):
     thumb_fin_mlp.eval()
     headpos_fin_mlp.eval()
     headdir_fin_mlp.eval()
-    cpca.eval()
 
     rmses = torch.empty(0)
     preds = torch.empty(0)
@@ -217,12 +228,16 @@ def test(loader, path_map, criterion):
 
 # Epoch train + testing
 test_mse, test_rmse, final_df = test(test_loader, test_path_map, criterion)
+val_mse, val_rmse, val_final_df = test(val_loader, val_path_map, criterion)
+train_mse, train_rmse, train_final_df = test(train_loader, train_path_map, criterion)
 
 # Only add this if val data is available
 # val_rmse, val_ap, val_auc = test(val_loader)
 # print(f'Val AP: {val_ap:.4f}, Val AUC: {val_auc:.4f}')
 
 print(f'Test MSE: {test_mse:.4f}, Test RMSE: {test_rmse:.4f}')
+print(f'Val MSE: {val_mse:.4f}, Val RMSE: {val_rmse:.4f}')
+print(f'Train MSE: {train_mse:.4f}, Train RMSE: {train_rmse:.4f}')
 
 if verbose:
     writer.add_scalar('test_mse', test_mse, 0)
