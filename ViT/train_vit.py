@@ -142,6 +142,10 @@ def evaluate_model(model, dataset, batch_size, loss_func, device):
     return total_loss/len(dataloader)
 
 
+def norm_dataset(dataset, thumbstick_start, thumbsticks_loc, head_pos_loc):
+    dataset.df[dataset.df.columns[thumbstick_start:thumbsticks_loc]] = (dataset.df[dataset.df.columns[thumbstick_start:thumbsticks_loc]] + 1) / 2
+    dataset.df[dataset.df.columns[thumbsticks_loc:head_pos_loc]] = (dataset.df[dataset.df.columns[thumbsticks_loc:head_pos_loc]] + 2) / 4
+    dataset.df[dataset.df.columns[head_pos_loc:]] = (dataset.df[dataset.df.columns[head_pos_loc:]] + 1) / 2
 
 if __name__ == "__main__":
     #set image size and number of frames (frames should be 1 is using VIT)
@@ -196,14 +200,8 @@ if __name__ == "__main__":
     thumbsticks_loc = thumbstick_start + 4
     head_pos_loc = thumbsticks_loc + 3
 
-    train_set.df[train_set.df.columns[thumbstick_start:thumbsticks_loc]] = (train_set.df[train_set.df.columns[thumbstick_start:thumbsticks_loc]] + 1) / 2
-    val_set.df[val_set.df.columns[thumbstick_start:thumbsticks_loc]] = (val_set.df[val_set.df.columns[thumbstick_start:thumbsticks_loc]] + 1) / 2
-
-    train_set.df[train_set.df.columns[thumbsticks_loc:head_pos_loc]] = (train_set.df[train_set.df.columns[thumbsticks_loc:head_pos_loc]] + 2) / 4
-    val_set.df[val_set.df.columns[thumbsticks_loc:head_pos_loc]] = (val_set.df[val_set.df.columns[thumbsticks_loc:head_pos_loc]] + 2) / 4
-    
-    train_set.df[train_set.df.columns[head_pos_loc:]] = (train_set.df[train_set.df.columns[head_pos_loc:]] + 1) / 2
-    val_set.df[val_set.df.columns[head_pos_loc:]] = (val_set.df[val_set.df.columns[head_pos_loc:]] + 1) / 2
+    norm_dataset(train_set, thumbstick_start, thumbsticks_loc, head_pos_loc)
+    norm_dataset(val_set, thumbstick_start, thumbsticks_loc, head_pos_loc)
     
     
     #select device

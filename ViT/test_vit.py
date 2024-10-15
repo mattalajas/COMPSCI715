@@ -9,7 +9,7 @@ from vit_pytorch.vit_pytorch.vivit import ViT as VideoViT
 #add path to import data utils
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 import utils.datasets as d_u
-from train_vit import evaluate_model
+from train_vit import evaluate_model, norm_dataset
 
 #set image size and number of frames (for ViViT)
 img_size = 512
@@ -28,11 +28,23 @@ x_transform = torchvision.transforms.Compose([
 col_pred = ["thumbstick_left_x", "thumbstick_left_y", "thumbstick_right_x", "thumbstick_right_y", "head_pos_x", "head_pos_y", "head_pos_z", "head_dir_a", "head_dir_b", "head_dir_c", "head_dir_d"]
 
 #setup validation and testsets
-val_sessions = d_u.DataUtils.read_txt("COMPSCI715/datasets/barbie_demo_dataset/val.txt")
-val_set = d_u.SingleGameDataset("Barbie", val_sessions, transform=x_transform, frame_count=frames, cols_to_predict=col_pred)
+test_game_names = ['Kawaii_House', 'Kawaii_Daycare']
+val_sessions = d_u.read_txt("/data/kraw084/COMPSCI715/datasets/final_data_splits/val.txt")
+test_sessions = d_u.read_txt("/data/kraw084/COMPSCI715/datasets/final_data_splits/test.txt")
 
-test_sessions = d_u.DataUtils.read_txt("COMPSCI715/datasets/barbie_demo_dataset/test.txt")
-test_set = d_u.val_set = d_u.SingleGameDataset("Barbie", test_sessions, transform=x_transform, frame_count=frames, cols_to_predict=col_pred)
+col_pred = ["thumbstick_left_x", "thumbstick_left_y", "thumbstick_right_x", "thumbstick_right_y", "head_pos_x", "head_pos_y", "head_pos_z", "head_dir_a", "head_dir_b", "head_dir_c", "head_dir_d"]
+
+val_set = d_u.MultiGameDataset(test_game_names, val_sessions, cols_to_predict=col_pred, frame_count=frames, transform=x_transform)
+test_set = d_u.MultiGameDataset(test_game_names, test_sessions, cols_to_predict=col_pred, frame_count=frames, transform=x_transform)
+
+# Normalisation
+thumbstick_start = 2 + frames - 1
+thumbsticks_loc = thumbstick_start + 4
+head_pos_loc = thumbsticks_loc + 3
+
+norm_dataset(val_set, thumbstick_start, thumbsticks_loc, head_pos_loc)
+norm_dataset(test_set, thumbstick_start, thumbsticks_loc, head_pos_loc)
+
 
 #select device
 gpu_num = 4
