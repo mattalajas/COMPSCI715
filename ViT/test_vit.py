@@ -56,7 +56,7 @@ model = VideoViT(image_size = img_size,
 
 #put model in eval model and load weights
 model.eval()
-model_path = "models/vivit_v3/Epoch19.pt"
+model_path = "models/vivit_multigame_full_controls/Epoch15.pt"
 model.load_state_dict(torch.load(model_path, weights_only=True))
 
 #compute validation loss
