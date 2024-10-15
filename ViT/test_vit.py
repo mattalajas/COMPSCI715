@@ -8,7 +8,7 @@ from vit_pytorch.vit_pytorch.vivit import ViT as VideoViT
 
 #add path to import data utils
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-import utils.data_utils as d_u
+import utils.datasets as d_u
 from train_vit import evaluate_model
 
 #set image size and number of frames (for ViViT)
