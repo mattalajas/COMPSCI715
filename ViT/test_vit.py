@@ -35,7 +35,7 @@ test_sessions = d_u.DataUtils.read_txt("COMPSCI715/datasets/barbie_demo_dataset/
 test_set = d_u.val_set = d_u.SingleGameDataset("Barbie", test_sessions, transform=x_transform, frame_count=frames, cols_to_predict=col_pred)
 
 #select device
-gpu_num = 3
+gpu_num = 4
 device = torch.device(f'cuda:{gpu_num}')
 print(f"Using device {gpu_num}: {torch.cuda.get_device_properties(gpu_num).name}")
 
