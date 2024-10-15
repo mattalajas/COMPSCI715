@@ -13,7 +13,7 @@ from train_vit import evaluate_model
 
 #set image size and number of frames (for ViViT)
 img_size = 512
-frames = 12
+frames = 10
 
 #function to reshape image batch tensors for ViVit models
 reshape_for_vivit = lambda x: x.transpose(0, 1)
