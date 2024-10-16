@@ -16,10 +16,9 @@ from sklearn.metrics import (average_precision_score, roc_auc_score,
 from torch.utils.data import DataLoader, TensorDataset
 from torch.utils.tensorboard import SummaryWriter
 
-from aux_task import CPCA
-from models import MLP, LeNet, actionGRUdeep, actionGRU
-from RNNCNNutils import *
-from data_utils_copy import *
+from CNNRNN.models import MLP, LeNet, actionGRUdeep, actionGRU
+from utils.data_utils import *
+from utils.datasets import *
 from string import Template
 
 cuda_num = 5
@@ -115,12 +114,7 @@ optimizer = torch.optim.Adam([
     {'params': thumb_fin_mlp.parameters()},
     {'params': headpos_fin_mlp.parameters()},
     {'params': headdir_fin_mlp.parameters()}], lr=main_lr)
-# optimizer = torch.optim.Adam([
-#     {'params': init_conv.parameters()},
-#     {'params': init_gru.parameters()},
-#     {'params': cpca.parameters(), 'lr': aux_lr}], lr=main_lr)
-# optimizer = torch.optim.Adam([
-#     {'params': cpca.parameters(), 'lr': aux_lr}], lr=main_lr)
+
 criterion = torch.nn.MSELoss()
 
 save_path = f'/data/mala711/COMPSCI715/CNNRNN/models/{common_name}.pth'
@@ -213,27 +207,12 @@ def test(loader, path_map, criterion):
     actiondf = pd.DataFrame(all_actions, columns=col_pred)
     fin_df = paths_df.join(actiondf)
 
-    # u, c = torch.unique(preds, return_counts = True, dim=0)
-    # u = [str(x) for x in u.tolist()]
-    # if verbose: writer.add_histogram('Testing values', values=c, bins=u)
-    # print(u)
-    # c = sorted(c, reverse=True)
-    # print(c[0], sum(c[1:]))
-    
-    # plt.bar(u, c)
-    # plt.xticks(rotation=90)
-    # plt.show()
-
     return sum(rmses) / len(loader), sum(torch.sqrt(rmses)) / len(loader), fin_df
 
 # Epoch train + testing
 test_mse, test_rmse, final_df = test(test_loader, test_path_map, criterion)
 val_mse, val_rmse, val_final_df = test(val_loader, val_path_map, criterion)
 train_mse, train_rmse, train_final_df = test(train_loader, train_path_map, criterion)
-
-# Only add this if val data is available
-# val_rmse, val_ap, val_auc = test(val_loader)
-# print(f'Val AP: {val_ap:.4f}, Val AUC: {val_auc:.4f}')
 
 print(f'Test MSE: {test_mse:.4f}, Test RMSE: {test_rmse:.4f}')
 print(f'Val MSE: {val_mse:.4f}, Val RMSE: {val_rmse:.4f}')
