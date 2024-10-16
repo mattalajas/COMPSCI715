@@ -21,6 +21,7 @@ from vit_pytorch.vit_pytorch.vivit import ViT as VideoViT
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from utils.data_utils import DataUtils as d_u
 from utils.datasets import SingleGameDataset, MultiGameDataset
+from train_vit import norm_dataset
 
 img_size = 512
 frames = 10
@@ -44,10 +45,7 @@ test_set = MultiGameDataset(test_game_names, test_sessions, cols_to_predict=col_
 thumbstick_start = 2 + frames - 1
 thumbsticks_loc = thumbstick_start + 4
 head_pos_loc = thumbsticks_loc + 3
-
-test_set.df[test_set.df.columns[thumbstick_start:thumbsticks_loc]] = (test_set.df[test_set.df.columns[thumbstick_start:thumbsticks_loc]] + 1) / 2
-test_set.df[test_set.df.columns[thumbsticks_loc:head_pos_loc]] = (test_set.df[test_set.df.columns[thumbsticks_loc:head_pos_loc]] + 2) / 4
-test_set.df[test_set.df.columns[head_pos_loc:]] = (test_set.df[test_set.df.columns[head_pos_loc:]] + 1) / 2
+norm_dataset(test_set, thumbstick_start, thumbsticks_loc, head_pos_loc)
 
 gpu_num = 0
 device = torch.device(f'cuda:{gpu_num}')
