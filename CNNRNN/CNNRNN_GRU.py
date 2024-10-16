@@ -6,8 +6,6 @@ import torch.utils.data
 import tqdm
 import os
 import sys
-from sklearn.metrics import (average_precision_score, roc_auc_score,
-                             root_mean_squared_error)
 from torch.utils.tensorboard import SummaryWriter
 
 # Initialise path
@@ -18,6 +16,7 @@ from utils.data_utils import *
 from utils.datasets import *
 from string import Template
 
+# Cuda setup
 cuda_num = 5
 device = torch.device('mps' if torch.backends.mps.is_available() else f'cuda:{cuda_num}' if torch.cuda.is_available() else 'cpu')
 # For data collection, change to True if want to evaluate output 
@@ -38,17 +37,10 @@ main_lr= 0.01
 regularisation = 0.00001
 dropout = 0.2
 rnn_emb = 256
-
-num_outputs= 11
-
+hid_size = 256
 weighted = True
 
-# Aux task hyperparams
-hid_size = 256
-aux_steps = seq_size - start_pred
-sub_rate = 0.1
-loss_fac = 0.5
-
+# Change this to match dataset
 train_game_names = ['Barbie']
 test_game_names = ['Barbie']
 val_game_names = ['Kawaii_House', 'Kawaii_Daycare']
@@ -59,13 +51,16 @@ train_sessions = DataUtils.read_txt("/data/mala711/COMPSCI715/datasets/barbie_de
 val_sessions = DataUtils.read_txt("/data/mala711/COMPSCI715/datasets/final_data_splits/val.txt")
 test_sessions = DataUtils.read_txt("/data/mala711/COMPSCI715/datasets/barbie_demo_dataset/test.txt")
 
+# Columns to predict
 col_pred = ["thumbstick_left_x", "thumbstick_left_y", "thumbstick_right_x", "thumbstick_right_y", "head_pos_x", "head_pos_y", "head_pos_z", "head_dir_a", "head_dir_b", "head_dir_c", "head_dir_d"]
+num_outputs = len(col_pred)
 
+# Get val and test sets
 train_set = MultiGameDataset(train_game_names, train_sessions, cols_to_predict=col_pred)
 val_set = MultiGameDataset(val_game_names, val_sessions, cols_to_predict=col_pred)
 test_set = MultiGameDataset(test_game_names, test_sessions, cols_to_predict=col_pred) 
 
-# Normalisation
+# Normalisation, feel free to change this 
 thumbsticks_loc = 6
 head_pos_loc = 9
 
@@ -81,12 +76,18 @@ train_set.df[train_set.df.columns[head_pos_loc:]] = (train_set.df[train_set.df.c
 val_set.df[val_set.df.columns[head_pos_loc:]] = (val_set.df[val_set.df.columns[head_pos_loc:]] + 1) / 2
 test_set.df[test_set.df.columns[head_pos_loc:]] = (test_set.df[test_set.df.columns[head_pos_loc:]] + 1) / 2
 
+# Subsample datasets
 train_path_map, train_loader = filter_dataframe(train_sessions, train_set.df, device, seq_size, batch_size, iter=iter_val)
 test_path_map, test_loader = filter_dataframe(test_sessions, test_set.df, device, seq_size, batch_size, iter=iter_val)
 
 # Run tensorboard summary writer
 save_name = f'GRU_train_{train_game_names}_test_{test_game_names}_init_test_seq_size_{seq_size}_seqstart_{start_pred}_iter_{iter_val}_reg_{regularisation}_lr_{main_lr}_dropout_{dropout}_weighting_{weighted}'
 if verbose: writer = SummaryWriter(f'/data/mala711/COMPSCI715/CNNRNN/runs/{save_name}')
+
+# Model path
+save_path = f'/data/mala711/COMPSCI715/CNNRNN/models/{save_name}.pth'
+
+############################### DO NOT CHANGE ANYTHING AFTER THIS LINE ###########################################
 
 # Initialise models
 init_conv = LeNet(img_size, hid_size, dropout=dropout).to(device)
@@ -106,18 +107,19 @@ optimizer = torch.optim.Adam([
 def weighted_mse_loss(input, target, weight):
     return (weight * (input - target) ** 2)
 
+# Get either weighted or non weighted loss
 if weighted:
     criterion = weighted_mse_loss
 else:
     criterion = torch.nn.MSELoss()
 
+# Train function
 def train(loader, path_map, optimizer, criterion):
     init_gru.train()
     init_conv.train()
     thumb_fin_mlp.train()
     headpos_fin_mlp.train()
     headdir_fin_mlp.train()
-    # cpca.train()
     
     total_loss = []
     preds = torch.empty(0)
@@ -125,6 +127,7 @@ def train(loader, path_map, optimizer, criterion):
     prog_bar = tqdm.tqdm(range(len(loader)))
     for batch in loader:
         optimizer.zero_grad()
+
         # Need to initialise the hidden state for GRU
         h0 = torch.empty((batch.shape[0], hid_size)).to(device)
         h0 = torch.nn.init.xavier_uniform_(h0)
@@ -299,6 +302,6 @@ if save_file:
             'headpos_fin_mlp_state_dict': headpos_fin_mlp.state_dict(),
             'headdir_fin_mlp_state_dict': headdir_fin_mlp.state_dict(),
             'optimizer_state_dict' : optimizer.state_dict(),
-            }, f"/data/mala711/COMPSCI715/CNNRNN/models/{save_name}.pth")
+            }, f"{save_path}")
 
 if verbose: writer.close()
