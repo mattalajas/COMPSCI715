@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.utils.data
+import timm
 from torch.distributions import Normal
 from COMPSCI715.CNNRNN import models
 
@@ -126,6 +127,32 @@ class ActorCriticConv(nn.Module):
         dist = Normal(mu, std)
         return dist, value, h1_c, h1_a, c1_c, c1_a
     
+class ActorCriticSingle(nn.Module):
+    def __init__(self, num_inputs, num_outputs, hidden_size, std=0.0):
+        super(ActorCriticSingle, self).__init__()
+        
+        self.critic = nn.Sequential(
+            nn.Linear(num_inputs, hidden_size),
+            nn.ReLU(),
+            nn.Linear(hidden_size, 1)
+        )
+        
+        self.actor = nn.Sequential(
+            nn.Linear(num_inputs, hidden_size),
+            nn.ReLU(),
+            nn.Linear(hidden_size, num_outputs),
+        )
+        self.log_std = nn.Parameter(torch.ones(1, num_outputs) * std)
+        
+        self.apply(init_weights)
+        
+    def forward(self, x):
+        value = self.critic(x)
+        mu    = F.sigmoid(self.actor(x))
+        std   = self.log_std.exp().expand_as(mu)
+        dist  = Normal(mu, std)
+        return dist, value
+    
 class Discriminator(nn.Module):
     def __init__(self, num_inputs, hidden_size, rnn_type, dropout = 0):
         super(Discriminator, self).__init__()
@@ -220,4 +247,43 @@ class DiscriminatorConv(nn.Module):
         reduction_dims = tuple(range(1, num_dims))
         out = torch.mean(out, dim=reduction_dims)
 
+        return out
+    
+class DiscriminatorSingle(nn.Module):
+    def __init__(self, num_inputs, hidden_size):
+        super(DiscriminatorSingle, self).__init__()
+        
+        self.linear1   = nn.Linear(num_inputs, hidden_size)
+        self.linear2   = nn.Linear(hidden_size, hidden_size)
+        self.linear3   = nn.Linear(hidden_size, 1)
+        self.linear3.weight.data.mul_(0.1)
+        self.linear3.bias.data.mul_(0.0)
+    
+    def forward(self, x):
+        x = F.tanh(self.linear1(x))
+        x = F.tanh(self.linear2(x))
+        prob = F.sigmoid(self.linear3(x))
+        return prob
+
+class TrainedResNet(nn.Module):
+    def __init__(self, final_out, freeze = True):
+        super(TrainedResNet, self).__init__()
+        # Load a pre-trained ResNet-50 model from timm
+        self.resnet_model = timm.create_model('resnet50', pretrained=True)
+
+        # Freeze ResNet weights (optional)
+        for param in self.resnet_model.parameters():
+            param.requires_grad = freeze # True or False
+
+        hid_size = self.resnet_model.fc.out_features
+        # Modify ResNet output
+        
+        self.fc1 = nn.Linear(hid_size, hid_size//2)
+        self.fc2 = nn.Linear(hid_size//2, final_out)
+        
+    def forward(self, x):
+        res = F.sigmoid(self.resnet_model(x))
+
+        out = F.relu(self.fc1(res))
+        out = self.fc2(out)
         return out
