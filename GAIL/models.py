@@ -5,7 +5,7 @@ import torch.nn.functional as F
 import torch.utils.data
 import timm
 from torch.distributions import Normal
-from COMPSCI715.CNNRNN import models
+from CNNRNN import models
 
 def init_weights(m):
     if isinstance(m, nn.Linear):

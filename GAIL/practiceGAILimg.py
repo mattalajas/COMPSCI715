@@ -5,13 +5,18 @@ import tqdm
 from copy import deepcopy
 from functools import partial
 from string import Template
+import sys
+import os
 from torch.utils.tensorboard import SummaryWriter
 
-from COMPSCI715.GAIL.utils import *
-from COMPSCI715.GAIL.models import *
-from COMPSCI715.utils.data_utils import *
-from COMPSCI715.utils.datasets import *
-from COMPSCI715.CNNRNN.models import *
+# Initialise path
+sys.path.insert(0, os.getcwd())
+
+from utils.data_utils import *
+from utils.datasets import *
+from CNNRNN.models import *
+from GAIL.utils import *
+from GAIL.models import *
 
 # Cuda settings
 cuda_num = 6

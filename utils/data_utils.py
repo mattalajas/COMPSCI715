@@ -212,11 +212,11 @@ if __name__ == "__main__":
     #val_sessions = DataUtils.read_txt("COMPSCI715/datasets/barbie_demo_dataset/val.txt")
     #test_sessions = DataUtils.read_txt("COMPSCI715/datasets/barbie_demo_dataset/test.txt")
     
-    barbie_train_set = SingleGameDataset("Barbie", train_sessions, frame_count=9)
+    #barbie_train_set = SingleGameDataset("Barbie", train_sessions, frame_count=9)
     #barbie_val_set = SingleGameDataset("Barbie", val_sessions)
     #barbie_test_set = SingleGameDataset("Barbie", test_sessions)
     
-    print(f"Items in train set: {len(barbie_train_set)}")
+    #print(f"Items in train set: {len(barbie_train_set)}")
     #print(f"Items in val set: {len(barbie_val_set)}")
     #print(f"Items in test set: {len(barbie_val_set)}")
 
