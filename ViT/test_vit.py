@@ -9,6 +9,7 @@ from vit_pytorch.vit_pytorch.vivit import ViT as VideoViT
 #add path to import data utils
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 import utils.datasets as d_u
+from utils.data_utils import DataUtils
 from train_vit import evaluate_model, norm_dataset
 
 #set image size and number of frames (for ViViT)
@@ -29,8 +30,8 @@ col_pred = ["thumbstick_left_x", "thumbstick_left_y", "thumbstick_right_x", "thu
 
 #setup validation and testsets
 test_game_names = ['Kawaii_House', 'Kawaii_Daycare']
-val_sessions = d_u.read_txt("/data/kraw084/COMPSCI715/datasets/final_data_splits/val.txt")
-test_sessions = d_u.read_txt("/data/kraw084/COMPSCI715/datasets/final_data_splits/test.txt")
+val_sessions = DataUtils.read_txt("/data/kraw084/COMPSCI715/datasets/final_data_splits/val.txt")
+test_sessions = DataUtils.read_txt("/data/kraw084/COMPSCI715/datasets/final_data_splits/test.txt")
 
 col_pred = ["thumbstick_left_x", "thumbstick_left_y", "thumbstick_right_x", "thumbstick_right_y", "head_pos_x", "head_pos_y", "head_pos_z", "head_dir_a", "head_dir_b", "head_dir_c", "head_dir_d"]
 
