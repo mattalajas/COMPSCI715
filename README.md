@@ -10,3 +10,5 @@ Datasets contain the various train/val/test splits used throughout development. 
 ## Import packages
 Ensure you run the script from the root directory of the project to allow Python to resolve the package structure correctly. For example:
 python CNNRNN/practice1.py
+
+Note that some models (such as ViT) require additional repositories to work. These repos are submodules so they should automatically be cloned along with this repo. If this does not happen, please ensure you clone these repos manually and place them in the same location as the submodules.
