@@ -19,7 +19,7 @@ from GAIL.utils import *
 from GAIL.models import *
 
 # Cuda settings
-cuda_num = 5
+cuda_num = 6
 device = torch.device('mps' if torch.backends.mps.is_available() else f'cuda:{cuda_num}' if torch.cuda.is_available() else 'cpu')
 # For data collection, change to True if want to evaluate output 
 verbose = True
@@ -29,7 +29,7 @@ save_file = True
 if torch.cuda.is_available():
     torch.cuda.empty_cache()
 
-#Hyper params:
+# Hyper params:
 ppo_epochs           = 10
 mini_batch_size      = 10
 
@@ -42,12 +42,9 @@ img_size = 64
 lr = 3e-2
 disc_lr = 3e-3
 dropout = 0.4
-rnn_emb = 256
 hid_size = 256
-rnn_type = 'gru'
-discrim_hidden_size  = 128
 weight_decay = 5e-3
-early_stop = 35
+early_stop = 40
 
 # Change this to match dataset
 train_game_names = ['Barbie']
@@ -90,8 +87,8 @@ train_path_map, train_loader = filter_dataframe(train_sessions, train_set.df, de
 test_path_map, test_loader = filter_dataframe(test_sessions, test_set.df, device, seq_size, batch_size, iter=iter_val)
 
 # Run tensorboard summary writer
-if verbose: writer = SummaryWriter(f'/data/mala711/COMPSCI715/GAIL/runs/GAILv2_{rnn_type.upper()}_train_{train_game_names}_test_{test_game_names}_ppoepochs_{ppo_epochs}_mini_batch_{mini_batch_size}_lr_{lr}_dlr_{disc_lr}_init_test_seq_size_{seq_size}_iter_{iter_val}_dropout_{dropout}_weightd_{weight_decay}')
-save_name = f'GAILv2_{rnn_type.upper()}_train_{train_game_names}_test_{test_game_names}_ppoepochs_{ppo_epochs}_mini_batch_{mini_batch_size}_lr_{lr}_dlr_{disc_lr}_init_test_seq_size_{seq_size}_iter_{iter_val}_dropout_{dropout}_weightd_{weight_decay}'
+save_name = f'GAILimg_train_{train_game_names}_test_{test_game_names}_ppoepochs_{ppo_epochs}_mini_batch_{mini_batch_size}_lr_{lr}_dlr_{disc_lr}_init_test_seq_size_{seq_size}_iter_{iter_val}_dropout_{dropout}_weightd_{weight_decay}'
+if verbose: writer = SummaryWriter(f'/data/mala711/COMPSCI715/GAIL/runs/{save_name}')
 
 # Model path
 save_path = f'/data/mala711/COMPSCI715/GAIL/models/{save_name}.pth'
@@ -101,8 +98,8 @@ save_path = f'/data/mala711/COMPSCI715/GAIL/models/{save_name}.pth'
 # Get models
 model_img_encoder = models.LeNet(img_size, hid_size, dropout=dropout).to(device)
 disc_img_encoder = models.LeNet(img_size, hid_size, dropout=dropout).to(device)
-model = ActorCritic(num_outputs, hid_size, rnn_type, rnn_emb, hid_size, num_outputs, dropout=dropout).to(device)
-discriminator = Discriminator(hid_size + num_outputs, hid_size, rnn_type, dropout).to(device)
+model = ActorCriticSingle(hid_size, num_outputs, hid_size).to(device)
+discriminator = DiscriminatorSingle(hid_size + num_outputs, hid_size).to(device)
 
 # Read image function
 read_img = partial(read_images, image_path = image_path, img_size = img_size, device = device)
@@ -140,35 +137,16 @@ def train(loader, path_map, model_img_encoder, disc_img_encoder,\
         d_states  = []
         actions   = []
         rewards   = []
-        h0_as     = []
-        h0_cs     = []
-        c0_as     = []
-        c0_cs     = []
         entropy = 0
-
-        # Initialise RNN hidden states
-        h0_a = torch.empty((batch.shape[0], hid_size)).to(device)
-        h0_a = torch.nn.init.xavier_uniform_(h0_a)
-
-        h0_c = torch.empty((batch.shape[0], hid_size)).to(device)
-        h0_c = torch.nn.init.xavier_uniform_(h0_c)
-
-        c0_a = torch.zeros((batch.shape[0], hid_size)).to(device)
-        c0_a = torch.nn.init.xavier_uniform_(c0_a)
-
-        c0_c = torch.zeros((batch.shape[0], hid_size)).to(device)
-        c0_c = torch.nn.init.xavier_uniform_(c0_c)
 
         path = batch[:, 0, 0]
         path = [path_map[int(i)] for i in path]
         images = read_images(path, batch[:, 0, 1], image_path, img_size, device)
 
-        action = torch.Tensor(batch[:, 0, 2:]).to(device)
-
         for seq in range(1, num_steps):
             # Get actor critic values
             state = model_img_encoder(images)
-            dist, value, h0_c_new, h0_a_new, c0_c_new, c0_a_new = model(state, action, h0_c, h0_a, c0_c, c0_a)
+            dist, value = model(state)
 
             action = dist.sample()
 
@@ -179,7 +157,7 @@ def train(loader, path_map, model_img_encoder, disc_img_encoder,\
             next_images = read_images(n_path, n_indices, image_path, img_size, device)
 
             disc_state = disc_img_encoder(images) 
-            reward = expert_reward(disc_state, h0_c, h0_a, c0_c, c0_a, action, device, discriminator)
+            reward = expert_reward_single(disc_state, action, device, discriminator)
             
             log_prob = dist.log_prob(action)
             entropy += dist.entropy().mean()
@@ -192,17 +170,8 @@ def train(loader, path_map, model_img_encoder, disc_img_encoder,\
             d_states.append(disc_state)
 
             actions.append(action)
-            h0_as.append(deepcopy(h0_a.detach()))
-            h0_cs.append(deepcopy(h0_c.detach()))
-            c0_as.append(deepcopy(c0_a.detach()))
-            c0_cs.append(deepcopy(c0_c.detach()))
-            
-            images = next_images
-            h0_c = h0_c_new
-            h0_a = h0_a_new
-            c0_c = c0_c_new
-            c0_a = c0_a_new
 
+            images = next_images
             # Change the reward gain
             # if epoch % 1000 == 0:
             #     test_reward = np.mean([test_env() for _ in range(10)])
@@ -212,7 +181,7 @@ def train(loader, path_map, model_img_encoder, disc_img_encoder,\
         
         all_rewards.append(sum(rewards) / len(rewards))
         state = model_img_encoder(images)
-        _, next_value, _, _, _, _ = model(state, action, h0_c, h0_a, c0_c, c0_a)
+        _, next_value = model(state)
         returns = compute_gae(next_value, rewards, values)
 
         returns   = torch.stack(returns).detach()
@@ -221,15 +190,10 @@ def train(loader, path_map, model_img_encoder, disc_img_encoder,\
         states    = torch.stack(states)
         actions   = torch.stack(actions)
         d_states  = torch.stack(d_states)
-        h0_as     = torch.stack(h0_as)
-        h0_cs     = torch.stack(h0_cs)
-        c0_as     = torch.stack(c0_as)
-        c0_cs     = torch.stack(c0_cs)
         advantage = returns - values
         
         # if i_update % 3 == 0:
-        ppo_loss = ppo_update(model, optimizer, ppo_epochs, mini_batch_size, states, actions, \
-                            h0_as, h0_cs, c0_as, c0_cs, log_probs, returns, advantage)
+        ppo_loss = ppo_update_single(model, optimizer, ppo_epochs, mini_batch_size, states, actions, log_probs, returns, advantage)
         ppo_losses.append(ppo_loss)
 
         # Change expert traj to the actions of expert
@@ -239,18 +203,8 @@ def train(loader, path_map, model_img_encoder, disc_img_encoder,\
         expert_state_action = torch.cat([d_states, expert_action], 2).to(device)
         state_action        = torch.cat([states, actions], 2).to(device)
 
-        # Initialise hidden states
-        d_h0_a = torch.empty((batch.shape[0], hid_size)).to(device)
-        d_h0_a = torch.nn.init.xavier_uniform_(d_h0_a)
-        d_h0_c = torch.empty((batch.shape[0], hid_size)).to(device)
-        d_h0_c = torch.nn.init.xavier_uniform_(d_h0_c)
-        d_c0_a = torch.zeros((batch.shape[0], hid_size)).to(device)
-        d_c0_a = torch.nn.init.xavier_uniform_(d_c0_a)
-        d_c0_c = torch.zeros((batch.shape[0], hid_size)).to(device)
-        d_c0_c = torch.nn.init.xavier_uniform_(d_c0_c)
-
-        fake = discriminator(state_action, d_h0_c, d_h0_a, d_c0_c, d_c0_a)
-        real = discriminator(expert_state_action, d_h0_c, d_h0_a, d_c0_c, d_c0_a)
+        fake = discriminator(state_action)
+        real = discriminator(expert_state_action)
 
         optimizer_discrim.zero_grad()
         discrim_loss = d_criterion(fake, torch.ones(fake.shape).to(device)) + \
@@ -300,29 +254,14 @@ def test(loader, path_map, model_img_encoder, disc_img_encoder, model, discrimin
             rewards   = []
             entropy = 0
 
-            # Initialise RNN hidden states
-            h0_a = torch.empty((batch.shape[0], hid_size)).to(device)
-            h0_a = torch.nn.init.xavier_uniform_(h0_a)
-
-            h0_c = torch.empty((batch.shape[0], hid_size)).to(device)
-            h0_c = torch.nn.init.xavier_uniform_(h0_c)
-
-            c0_a = torch.zeros((batch.shape[0], hid_size)).to(device)
-            c0_a = torch.nn.init.xavier_uniform_(c0_a)
-
-            c0_c = torch.zeros((batch.shape[0], hid_size)).to(device)
-            c0_c = torch.nn.init.xavier_uniform_(c0_c)
-
             path = batch[:, 0, 0]
             path = [path_map[int(i)] for i in path]
             images = read_images(path, batch[:, 0, 1], image_path, img_size, device)
 
-            action = torch.Tensor(batch[:, 0, 2:]).to(device)
-
             for seq in range(1, num_steps):
                 # Get actor critic values
                 state = model_img_encoder(images)
-                dist, value, h0_c_new, h0_a_new, c0_c_new, c0_a_new = model(state, action, h0_c, h0_a, c0_c, c0_a)
+                dist, value = model(state)
 
                 action = dist.sample()
 
@@ -334,7 +273,7 @@ def test(loader, path_map, model_img_encoder, disc_img_encoder, model, discrimin
                 
                 # next_state, _, done, _ = envs.step(action.cpu().numpy())
                 disc_state = disc_img_encoder(images)
-                reward = expert_reward(disc_state, h0_c, h0_a, c0_c, c0_a, action, device, discriminator)
+                reward = expert_reward_single(disc_state, action, device, discriminator)
                 
                 log_prob = dist.log_prob(action)
                 entropy += dist.entropy().mean()
@@ -345,14 +284,10 @@ def test(loader, path_map, model_img_encoder, disc_img_encoder, model, discrimin
                 
                 states.append(state)
                 d_states.append(disc_state)
+
                 actions.append(action)
                 
                 images = next_images
-                h0_c = h0_c_new
-                h0_a = h0_a_new
-                c0_c = c0_c_new
-                c0_a = c0_a_new
-
                 # Change the reward gain
                 # if epoch % 1000 == 0:
                 #     test_reward = np.mean([test_env() for _ in range(10)])
@@ -362,7 +297,7 @@ def test(loader, path_map, model_img_encoder, disc_img_encoder, model, discrimin
             
             all_rewards.append(sum(rewards) / len(rewards))
             state = model_img_encoder(images)
-            _, next_value, _, _, _, _ = model(state, action, h0_c, h0_a, c0_c, c0_a)
+            _, next_value = model(state)
             returns = compute_gae(next_value, rewards, values)
 
             returns   = torch.stack(returns)
@@ -379,18 +314,8 @@ def test(loader, path_map, model_img_encoder, disc_img_encoder, model, discrimin
             expert_state_action = torch.cat([d_states, expert_action], 2).to(device)
             state_action        = torch.cat([states, actions], 2).to(device)
 
-            # Initialise hidden states
-            d_h0_a = torch.empty((batch.shape[0], hid_size)).to(device)
-            d_h0_a = torch.nn.init.xavier_uniform_(d_h0_a)
-            d_h0_c = torch.empty((batch.shape[0], hid_size)).to(device)
-            d_h0_c = torch.nn.init.xavier_uniform_(d_h0_c)
-            d_c0_a = torch.zeros((batch.shape[0], hid_size)).to(device)
-            d_c0_a = torch.nn.init.xavier_uniform_(d_c0_a)
-            d_c0_c = torch.zeros((batch.shape[0], hid_size)).to(device)
-            d_c0_c = torch.nn.init.xavier_uniform_(d_c0_c)
-
-            fake = discriminator(state_action, d_h0_c, d_h0_a, d_c0_c, d_c0_a)
-            real = discriminator(expert_state_action, d_h0_c, d_h0_a, d_c0_c, d_c0_a)
+            fake = discriminator(state_action)
+            real = discriminator(expert_state_action)
 
             discrim_loss = d_criterion(fake, torch.ones(fake.shape).to(device)) + \
                 d_criterion(real, torch.zeros(real.shape).to(device))
@@ -409,6 +334,7 @@ def test(loader, path_map, model_img_encoder, disc_img_encoder, model, discrimin
 
     return mean_discrim_loss, mean_rewards
 
+# Run epochs
 for epoch in range(1, epochs+1):
     train_ppo_loss, train_discrim_loss, train_rewards = train(train_loader, train_path_map, \
                                                               model_img_encoder, disc_img_encoder, model, \
@@ -433,6 +359,7 @@ for epoch in range(1, epochs+1):
         writer.add_scalar('test_discrim_loss', test_discrim_loss, epoch)
         writer.add_scalar('test_rewards', test_rewards, epoch)
 
+# Save model
 if save_file:
     torch.save({
             'model_img_encoder_state_dict': model_img_encoder.state_dict(),
