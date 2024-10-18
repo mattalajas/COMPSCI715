@@ -205,7 +205,7 @@ if __name__ == "__main__":
     
     
     #select device
-    gpu_num = 0
+    gpu_num = 7
     device = torch.device(f'cuda:{gpu_num}')
     print(f"Using device {gpu_num}: {torch.cuda.get_device_properties(gpu_num).name}")
     
