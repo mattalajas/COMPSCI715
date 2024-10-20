@@ -53,20 +53,29 @@ def update(frame):
         if os.path.exists(image_path):
             img = Image.open(image_path)
             image_plot.set_data(img)
+        # Thumbstick 0 and Thumbstick 1
         thumbstick_0 = df['Thumbstick_0'].iloc[index]
         thumbstick_1 = df['Thumbstick_1'].iloc[index]
         x_data.append(thumbstick_0)
         y_data.append(thumbstick_1)
+        # Keep only the last 100 points
+        x_data[:] = x_data[-100:]
+        y_data[:] = y_data[-100:]
         line.set_data(x_data, y_data)
         current_point.set_data([thumbstick_0], [thumbstick_1])
+        # Thumbstick 2 and Thumbstick 3
         thumbstick_2 = df['Thumbstick_2'].iloc[index]
         thumbstick_3 = df['Thumbstick_3'].iloc[index]
         x_data2.append(thumbstick_2)
         y_data2.append(thumbstick_3)
+        # Keep only the last 100 points
+        x_data2[:] = x_data2[-100:]
+        y_data2[:] = y_data2[-100:]
         line2.set_data(x_data2, y_data2)
         current_point2.set_data([thumbstick_2], [thumbstick_3])
         index += 1
     return image_plot, line, current_point, line2, current_point2
+
 
 ani = FuncAnimation(fig, update, frames=np.arange(0, len(df)), interval=100)
 
