@@ -1,6 +1,6 @@
 import os
 import sys
-sys.path.insert(0, '/data/ysun209/app/0_python/COMPSCI715')
+sys.path.insert(0, os.getcwd())
 import utils.data_utils as data_utils
 import torch
 import torch.nn as nn
@@ -70,10 +70,10 @@ transform = torchvision.transforms.Compose([
 frames = 12
 cols_to_predict_value = ["thumbstick_left_x", "thumbstick_left_y", "thumbstick_right_x", "thumbstick_right_y"]
 
-train_sessions = data_utils.DataUtils.read_txt("/data/ysun209/app/0_git/COMPSCI715/datasets/barbie_demo_dataset/train.txt")
+train_sessions = data_utils.DataUtils.read_txt("./datasets/barbie_demo_dataset/train.txt")
 train_set = data_utils.SingleGameDataset("Barbie", train_sessions, transform=transform, frame_count=frames, cols_to_predict=cols_to_predict_value)
 
-val_sessions = data_utils.DataUtils.read_txt("/data/ysun209/app/0_git/COMPSCI715/datasets/barbie_demo_dataset/val.txt")
+val_sessions = data_utils.DataUtils.read_txt("./datasets/barbie_demo_dataset/val.txt")
 val_set = data_utils.SingleGameDataset("Barbie", val_sessions, transform=transform, frame_count=frames, cols_to_predict=cols_to_predict_value)
 
 train_loader = DataLoader(train_set, batch_size=64, shuffle=True, num_workers=16, pin_memory=True)

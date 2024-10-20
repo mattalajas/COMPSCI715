@@ -1,6 +1,6 @@
 import os
 import sys
-sys.path.insert(0, '/data/ysun209/app/0_git/COMPSCI715')
+sys.path.insert(0, os.getcwd())
 import utils.data_utils as data_utils
 import utils.datasets as data_utils_datasets
 import torch
@@ -25,13 +25,13 @@ train_game_names = ['Barbie', 'Kawaii_Fire_Station', 'Kawaii_Playroom', 'Kawaii_
 test_game_names = ['Kawaii_House', 'Kawaii_Daycare']
 val_game_names = ['Kawaii_House', 'Kawaii_Daycare']
 
-train_sessions = data_utils.DataUtils.read_txt("/data/ysun209/app/0_git/COMPSCI715/datasets/final_data_splits/train.txt")
+train_sessions = data_utils.DataUtils.read_txt("./datasets/final_data_splits/train.txt")
 train_set = data_utils_datasets.MultiGameDataset(train_game_names, train_sessions, transform=transform, cols_to_predict=cols_to_predict_value)
 
-val_sessions = data_utils.DataUtils.read_txt("/data/ysun209/app/0_git/COMPSCI715/datasets/final_data_splits/val.txt")
+val_sessions = data_utils.DataUtils.read_txt("./datasets/final_data_splits/val.txt")
 val_set = data_utils_datasets.MultiGameDataset(val_game_names, val_sessions, transform=transform, cols_to_predict=cols_to_predict_value)
 
-test_sessions = data_utils.DataUtils.read_txt("/data/ysun209/app/0_git/COMPSCI715/datasets/final_data_splits/test.txt")
+test_sessions = data_utils.DataUtils.read_txt("./datasets/final_data_splits/test.txt")
 test_set = data_utils_datasets.MultiGameDataset(test_game_names, test_sessions, transform=transform, cols_to_predict=cols_to_predict_value)
 
 
