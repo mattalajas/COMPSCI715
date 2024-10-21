@@ -10,6 +10,10 @@ Datasets contain the various train/val/test splits used throughout development. 
 ## Import packages
 Kindly download packages from the ```requirements.txt``` file
 
+```
+pip install -r requirements.txt
+```
+
 Ensure you run the script from the root directory of the project to allow Python to resolve the package structure correctly. For example:
 
 ```
