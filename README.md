@@ -73,6 +73,14 @@ To run the pretrained models, please utilise any script in the ```transfer-learn
 
 ```
 python transfer-learning/ResNet/ResNet50-MultipleGame.py
+python transfer-learning/MobileNet/mobilenetv4ConvSmall-MultipleGame.py
+```
+
+To create a CSV of Pretrained Models predictions on the test set run the following script:
+
+```
+python transfer-learning/ResNet/ResNet50_MultipleGame_Generate_CSVs.py
+python transfer-learning/MobileNet/mobilenetv4ConvSmall-MultipleGame_Generate_CSVs.py
 ```
 
 This finally saves the model which can be used to create the CSV files.
