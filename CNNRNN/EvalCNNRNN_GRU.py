@@ -80,7 +80,7 @@ test_path_map, test_loader = filter_dataframe(test_sessions, test_set.df, device
 val_path_map, val_loader = filter_dataframe(val_sessions, val_set.df, device, seq_size, batch_size, iter=iter_val)
 
 # Run tensorboard summary writer
-common_name = f'GRU_CPCA_train_{train_game_names}_test_{test_game_names}_init_test_seq_size_{seq_size}_seqstart_{start_pred}_iter_{iter_val}_reg_{regularisation}_lr_{main_lr}_dropout_{dropout}_weighting_{weighting}'
+common_name = f'GRU_train_{train_game_names}_test_{test_game_names}_init_test_seq_size_{seq_size}_seqstart_{start_pred}_iter_{iter_val}_reg_{regularisation}_lr_{main_lr}_dropout_{dropout}_weighting_{weighting}'
 if verbose: writer = SummaryWriter(f'/data/mala711/COMPSCI715/CNNRNN/runs/Eval{common_name}')
 
 # Model path and save path
