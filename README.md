@@ -3,7 +3,7 @@ Agent for Automated Navigation in VR Environments
 
 Code relating to the training and testing of each model can be found in their respective folders (CNNRNN, GAIL, ViT, c-rnn-gan and transfer-learning).
 
-Utils contain shared code for retrieving the dataset, formatting data, creating pytorch dataset objects and visualisation tools.
+Utils contain shared code for retrieving the dataset, formatting data, creating pytorch dataset objects and visualisation tools. Most notably, ```visualisation.ipynb``` contains our generated visualisations and results
 
 Datasets contain the various train/val/test splits used throughout development. Each split is described by a txt of session names. A CSV of all session names is also included to help make new splits.
 
@@ -25,7 +25,7 @@ For training, please set the hyperparameters in the file and run the script:
 python CNNRNN/CNNRNN_GRU.py
 ```
 
-After training, use the same hyperparameters to retrieve the model and evaluate using the script:
+After training, use the same hyperparameters to retrieve the model, evaluate, and create the result CSVs using the script:
 
 ```
 python CNNRNN/EvalCNNRNN_GRU.py
@@ -38,7 +38,7 @@ For training, please set the hyperparameters in the file and run any script:
 python GAIL/practiceGAIL*.py
 ```
 
-After training, use the same hyperparameters to retrieve the model and evaluate using any script:
+After training, use the same hyperparameters to retrieve the model, evaluate, and create the result CSVs using any script:
 
 ```
 python GAIL/evalPracGAIL*.py
