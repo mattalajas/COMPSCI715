@@ -45,7 +45,7 @@ python GAIL/evalPracGAIL*.py
 ```
 
 ### Video Transformer
-Note that the ViT-related code requires an additional repository to work. This repo is a submodule so it should automatically be cloned along with this repo. If this does not happen, please ensure you clone the vit-pytorch repo manually into the ViT folder.
+Note that the ViT-related code requires an additional repository to work. This repo is a submodule so it should automatically be cloned along with this repo. If this does not happen, please ensure you clone the vit-pytorch (https://github.com/kraw084/vit_pytorch) repo manually into the ViT folder.
 
 ViT and ViViT models can be trained by running the following script:
 ```
