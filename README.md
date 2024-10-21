@@ -45,4 +45,22 @@ python GAIL/evalPracGAIL*.py
 ```
 
 ### Video Transformer
-Note that some models (such as ViT) require additional repositories to work. These repos are submodules so they should automatically be cloned along with this repo. If this does not happen, please ensure you clone these repos manually and place them in the same location as the submodules.
+Note that the ViT-related code requires an additional repository to work. This repo is a submodule so it should automatically be cloned along with this repo. If this does not happen, please ensure you clone the vit-pytorch repo manually into the ViT folder.
+
+ViT and ViViT models can be trained by running the following script:
+```
+python ViT/train_vit.py
+```
+By default, this script is set up to train a ViViT model with the best hyperparameters we found. To change the hyperparameters or dataset used, follow the comments in this script and adjust the variables defined in the ```if __name__ == "__main__"``` section of the code. Running this script will create a folder at save_dir (specified in the script), which will store the model checkpoints and tensor boards. 
+
+To load a model checkpoint and calculate the validation and test set MSE run:
+```
+python ViT/test_vit.py
+```
+
+To create a CSV of ViT (unormalised) model predictions on the test set run the following script:
+```
+python ViT/create_csv.py
+```
+This will create a csv in the ViT/csvs folder. To change the model being used or the name of csv, edit the script accordingly.
+
