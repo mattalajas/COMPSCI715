@@ -64,3 +64,12 @@ python ViT/create_csv.py
 ```
 This will create a csv in the ViT/csvs folder. To change the model being used or the name of csv, edit the script accordingly.
 
+### Pretrained Models
+To run the pretrained models, please utilise any script in the ```transfer-learning``` directory and change its hyperparameters. For example:
+
+```
+python transfer-learning/ResNet/ResNet50-MultipleGame.py
+```
+
+This finally saves the model which can be used to create the CSV files.
+
