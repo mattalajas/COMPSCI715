@@ -4,3 +4,6 @@
 [submodule "ViT/vit_pytorch"]
 	path = ViT/vit_pytorch
 	url = https://github.com/kraw084/vit_pytorch.git
+[submodule "OpenXR-Layer-Input"]
+	path = OpenXR-Layer-Input
+	url = https://github.com/ShungFei/OpenXR-Layer-Input
